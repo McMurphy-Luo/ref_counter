@@ -142,7 +142,7 @@ namespace Cmm
     }
 
     void decrement() {
-      ref_counter_release(static_cast<const Derived*>(this));
+      ref_counter_release(this);
     }
 
     unsigned int use_count() const {
