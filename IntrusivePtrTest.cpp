@@ -67,10 +67,15 @@ TEST_CASE("BasicTest") {
     CHECK(ptr->use_count() == 2);
   }
   CHECK(ptr->use_count() == 1);
-  std::vector<Cmm::intrusive_ptr<TestInterface>> container;
-  container.push_back(ptr);
-  container.push_back(ptr);
-  container.push_back(ptr);
-  container.push_back(ptr);
-  CHECK(ptr->use_count() == 5);
+  {
+    std::vector<Cmm::intrusive_ptr<TestInterface>> container;
+    container.push_back(ptr);
+    container.push_back(ptr);
+    container.push_back(ptr);
+    container.push_back(ptr);
+    CHECK(ptr->use_count() == 5);
+  }
+  Cmm::intrusive_ptr<TestInterface> move_result = std::move(ptr);
+  CHECK(!ptr);
+  CHECK(move_result->use_count() == 1);
 }

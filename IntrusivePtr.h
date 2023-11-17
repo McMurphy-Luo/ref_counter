@@ -51,12 +51,14 @@ namespace Cmm
     template< class Y, class T > struct sp_enable_if_convertible : public sp_enable_if_convertible_impl< sp_convertible< Y, T >::value >
     {
     };
-  }
+  } // namespace detail
 
   class ref_counter_base {
   public:
     virtual void increment() = 0;
+
     virtual void decrement() = 0;
+
     virtual unsigned int use_count() const = 0;
 
   protected:
@@ -179,12 +181,12 @@ namespace Cmm
     }
 
     // Move support
-    intrusive_ptr(intrusive_ptr&& rhs) : px(rhs.px)
+    intrusive_ptr(intrusive_ptr&& rhs) noexcept : px(rhs.px)
     {
       rhs.px = 0;
     }
 
-    intrusive_ptr& operator=(intrusive_ptr&& rhs)
+    intrusive_ptr& operator=(intrusive_ptr&& rhs) noexcept
     {
       this_type(static_cast<intrusive_ptr&&>(rhs)).swap(*this);
       return *this;
@@ -278,6 +280,136 @@ namespace Cmm
   private:
     T* px;
   };
-}
+
+  template<class T, class U> inline bool operator==(intrusive_ptr<T> const& a, intrusive_ptr<U> const& b)
+  {
+    return a.get() == b.get();
+  }
+
+  template<class T, class U> inline bool operator!=(intrusive_ptr<T> const& a, intrusive_ptr<U> const& b)
+  {
+    return a.get() != b.get();
+  }
+
+  template<class T, class U> inline bool operator==(intrusive_ptr<T> const& a, U* b)
+  {
+    return a.get() == b;
+  }
+
+  template<class T, class U> inline bool operator!=(intrusive_ptr<T> const& a, U* b)
+  {
+    return a.get() != b;
+  }
+
+  template<class T, class U> inline bool operator==(T* a, intrusive_ptr<U> const& b)
+  {
+    return a == b.get();
+  }
+
+  template<class T, class U> inline bool operator!=(T* a, intrusive_ptr<U> const& b)
+  {
+    return a != b.get();
+  }
+
+  template<class T> inline bool operator==(intrusive_ptr<T> const& p, std::nullptr_t)
+  {
+    return p.get() == 0;
+  }
+
+  template<class T> inline bool operator==(std::nullptr_t, intrusive_ptr<T> const& p)
+  {
+    return p.get() == 0;
+  }
+
+  template<class T> inline bool operator!=(intrusive_ptr<T> const& p, std::nullptr_t)
+  {
+    return p.get() != 0;
+  }
+
+  template<class T> inline bool operator!=(std::nullptr_t, intrusive_ptr<T> const& p)
+  {
+    return p.get() != 0;
+  }
+
+  template<class T> inline bool operator<(intrusive_ptr<T> const& a, intrusive_ptr<T> const& b)
+  {
+    return std::less<T*>()(a.get(), b.get());
+  }
+
+  template<class T> void swap(intrusive_ptr<T>& lhs, intrusive_ptr<T>& rhs)
+  {
+    lhs.swap(rhs);
+  }
+
+  // mem_fn support
+  template<class T> T* get_pointer(intrusive_ptr<T> const& p)
+  {
+    return p.get();
+  }
+
+  template<class T, class U> intrusive_ptr<T> static_pointer_cast(intrusive_ptr<U> const& p)
+  {
+    return static_cast<T*>(p.get());
+  }
+
+  template<class T, class U> intrusive_ptr<T> const_pointer_cast(intrusive_ptr<U> const& p)
+  {
+    return const_cast<T*>(p.get());
+  }
+
+  template<class T, class U> intrusive_ptr<T> dynamic_pointer_cast(intrusive_ptr<U> const& p)
+  {
+    return dynamic_cast<T*>(p.get());
+  }
+
+  template<class T, class U> intrusive_ptr<T> static_pointer_cast(intrusive_ptr<U>&& p)
+  {
+    return intrusive_ptr<T>(static_cast<T*>(p.detach()), false);
+  }
+
+  template<class T, class U> intrusive_ptr<T> const_pointer_cast(intrusive_ptr<U>&& p)
+  {
+    return intrusive_ptr<T>(const_cast<T*>(p.detach()), false);
+  }
+
+  template<class T, class U> intrusive_ptr<T> dynamic_pointer_cast(intrusive_ptr<U>&& p)
+  {
+    T* p2 = dynamic_cast<T*>(p.get());
+
+    intrusive_ptr<T> r(p2, false);
+
+    if (p2) p.detach();
+
+    return r;
+  }
+
+  template<class E, class T, class Y> std::basic_ostream<E, T>& operator<< (std::basic_ostream<E, T>& os, intrusive_ptr<Y> const& p)
+  {
+    os << p.get();
+    return os;
+  }
+
+} // namespace Cmm
+
+namespace std
+{
+  template<class T> struct hash< Cmm::intrusive_ptr<T> >
+  {
+    std::size_t operator()(Cmm::intrusive_ptr<T> const& p) const
+    {
+      return std::hash< T* >()(p.get());
+    }
+  };
+} // namespace std
+
+namespace Cmm
+{
+  template< class T > struct hash;
+
+  template< class T > std::size_t hash_value(intrusive_ptr<T> const& p)
+  {
+    return std::hash< T* >()(p.get());
+  }
+} // namespace Cmm
 
 #endif // INTRUSIVE_PTR_H_
