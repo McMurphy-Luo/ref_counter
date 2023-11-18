@@ -10,13 +10,22 @@
 
 #include "catch.hpp"
 #include "IntrusivePtr.h"
-#include "Windows.h"
 #include <string>
-#include "boost/smart_ptr/intrusive_ptr.hpp"
-#include "boost/smart_ptr/intrusive_ref_counter.hpp"
+
+using Cmm::RefCounter;
+using Cmm::RefCounterBase;
+using Cmm::RefCounterPtr;
+using Cmm::ThreadUnsafeCounter;
+using Cmm::ThreadSafeCounter;
+
+class ReferenceCounted0
+  : public RefCounter<ReferenceCounted0>
+{
+
+};
 
 class TestInterface1
-  : public Cmm::ref_counter_base
+  : public RefCounterBase
 {
 public:
   virtual int Test1() = 0;
@@ -25,14 +34,8 @@ protected:
   virtual ~TestInterface1() = default;
 };
 
-class ReferenceCounted0
-  : public Cmm::ref_counter<>
-{
-
-};
-
 class ReferenceCounted1
-  : public Cmm::ref_counter<Cmm::thread_unsafe_counter>
+  : public RefCounter<ReferenceCounted1, ThreadUnsafeCounter>
   , public TestInterface1
 {
 public:
@@ -45,53 +48,15 @@ public:
     return value;
   }
 
-  FORWARD_DEFINE_REF_COUNTER(Cmm::ref_counter<Cmm::thread_unsafe_counter>)
-
-protected:
-  virtual ~ReferenceCounted1() = default;
+  FORWARD_DEFINE_REF_COUNTER(RefCounter<ReferenceCounted1, ThreadUnsafeCounter>);
 
 private:
   std::unique_ptr<std::string> leak_detector_{ new std::string("hello") };
   int value;
 };
 
-TEST_CASE("BasicTest") {
-  {
-    Cmm::ref_counter_ptr<ReferenceCounted0> ptr;
-    ptr.reset(new ReferenceCounted0());
-    ptr.reset();
-  }
-  Cmm::ref_counter_ptr<TestInterface1> ptr;
-  CHECK(!ptr);
-  ptr.reset(new ReferenceCounted1(5));
-  CHECK(ptr);
-  CHECK(ptr->Test1() == 5);
-  CHECK(ptr->use_count() == 1);
-  ptr.reset();
-  CHECK(!ptr);
-  ptr.reset(new ReferenceCounted1(6));
-  CHECK(ptr);
-  CHECK(ptr->Test1() == 6);
-  {
-    Cmm::ref_counter_ptr<TestInterface1> another = ptr;
-    CHECK(ptr->use_count() == 2);
-  }
-  CHECK(ptr->use_count() == 1);
-  {
-    std::vector<Cmm::ref_counter_ptr<TestInterface1>> container;
-    container.push_back(ptr);
-    container.push_back(ptr);
-    container.push_back(ptr);
-    container.push_back(ptr);
-    CHECK(ptr->use_count() == 5);
-  }
-  Cmm::ref_counter_ptr<TestInterface1> move_result = std::move(ptr);
-  CHECK(!ptr);
-  CHECK(move_result->use_count() == 1);
-}
-
 class TestInterface2
-  : public Cmm::ref_counter_base
+  : public RefCounterBase
 {
 public:
   virtual std::string Test2() = 0;
@@ -103,23 +68,117 @@ protected:
 class ReferenceCounted2
   : public TestInterface2
   , public TestInterface1
-  , public Cmm::ref_counter<>
+  , public RefCounter<ReferenceCounted2>
 {
 public:
   ReferenceCounted2(int v1, std::string v2)
     : v1_(v1)
-    , v2_(v2)
+    , v2_(std::make_unique<std::string>(v2))
   {
 
   }
 
   virtual int Test1() override { return v1_; }
 
-  virtual std::string Test2() override { return v2_; }
+  virtual std::string Test2() override { return *v2_; }
 
-  FORWARD_DEFINE_REF_COUNTER(Cmm::ref_counter<>);
+  FORWARD_DEFINE_REF_COUNTER(RefCounter<ReferenceCounted2>);
 
 private:
   int v1_;
-  std::string v2_;
+  std::unique_ptr<std::string> v2_;
 };
+
+TEST_CASE("BasicTest") {
+  RefCounterPtr<ReferenceCounted0> ptr;
+  ptr.Reset(new ReferenceCounted0());
+  ptr.Reset();
+  ReferenceCounted0 second_one;
+  ReferenceCounted0 third_one = second_one;
+  CHECK(second_one.UseCount() == 0);
+  CHECK(third_one.UseCount() == 0);
+}
+
+TEST_CASE("Test Interface Based Reference Counting") {
+  RefCounterPtr<TestInterface1> ptr;
+  CHECK(!ptr);
+  ptr.Reset(new ReferenceCounted1(5));
+  CHECK(ptr);
+  CHECK(ptr->Test1() == 5);
+  CHECK(ptr->UseCount() == 1);
+  ptr.Reset();
+  CHECK(!ptr);
+  ptr.Reset(new ReferenceCounted1(6));
+  CHECK(ptr);
+  CHECK(ptr->Test1() == 6);
+  {
+    RefCounterPtr<TestInterface1> another = ptr;
+    CHECK(ptr->UseCount() == 2);
+  }
+  CHECK(ptr->UseCount() == 1);
+  {
+    std::vector<RefCounterPtr<TestInterface1>> container;
+    container.push_back(ptr);
+    container.push_back(ptr);
+    container.push_back(ptr);
+    container.push_back(ptr);
+    CHECK(ptr->UseCount() == 5);
+  }
+  RefCounterPtr<TestInterface1> move_result = std::move(ptr);
+  CHECK(!ptr);
+  CHECK(move_result->UseCount() == 1);
+  RefCounterPtr<ReferenceCounted2> true_object(new ReferenceCounted2(98, "Hello"));
+  ptr = true_object;
+  CHECK(ptr->UseCount() == 2);
+  CHECK(ptr->Test1() == 98);
+  move_result = ptr;
+  CHECK(move_result->Test1() == 98);
+  CHECK(move_result->UseCount() == 3);
+  RefCounterPtr<TestInterface2> another = true_object;
+  CHECK(ptr->UseCount() == 4);
+}
+
+class CustomDeletor
+  : public TestInterface1
+  , public RefCounter<CustomDeletor, ThreadUnsafeCounter>
+{
+public:
+  static CustomDeletor* instance;
+
+public:
+  CustomDeletor(int v)
+    : v_(v)
+  {
+  }
+
+  void Release() {
+    instance = this;
+  }
+
+  FORWARD_DEFINE_REF_COUNTER(RefCounter<CustomDeletor, ThreadUnsafeCounter>);
+
+  virtual int Test1() override {
+    return v_;
+  }
+
+private:
+  int v_;
+};
+
+void Release(CustomDeletor* p) {
+  CustomDeletor::instance = p;
+}
+
+CustomDeletor* CustomDeletor::instance = nullptr;
+
+TEST_CASE("Test Custom Deletor") {
+  CHECK(nullptr == CustomDeletor::instance);
+  RefCounterPtr<TestInterface1> ptr(new CustomDeletor(46));
+  TestInterface1* raw = ptr.Get();
+  ptr.Reset();
+  CHECK(CustomDeletor::instance == raw);
+  CHECK(raw->UseCount() == 0);
+  CHECK(raw->Test1() == 46);
+  free(CustomDeletor::instance);
+  raw = nullptr;
+}

@@ -53,210 +53,206 @@ namespace Cmm
     };
   } // namespace detail
 
-  class ref_counter_base {
+  class RefCounterBase {
   public:
-    virtual void increment() noexcept = 0;
+    virtual void Increment() noexcept = 0;
 
-    virtual void decrement() noexcept = 0;
+    virtual void Decrement() noexcept = 0;
 
-    virtual unsigned int use_count() const noexcept = 0;
+    virtual unsigned int UseCount() const noexcept = 0;
 
   protected:
-    virtual ~ref_counter_base() = default;
+    virtual ~RefCounterBase() = default;
   };
 
-  struct thread_unsafe_counter
+  struct ThreadUnsafeCounter
   {
-    typedef unsigned int type;
+    typedef unsigned int Type;
 
-    static unsigned int load(type const& counter) noexcept
+    static unsigned int Load(Type const& counter) noexcept
     {
       return counter;
     }
 
-    static void increment(type& counter) noexcept
+    static void Increment(Type& counter) noexcept
     {
       ++counter;
     }
 
-    static unsigned int decrement(type& counter) noexcept
+    static unsigned int Decrement(Type& counter) noexcept
     {
       return --counter;
     }
   };
 
-  struct thread_safe_counter
+  struct ThreadSafeCounter
   {
-    typedef std::atomic<unsigned int> type;
+    typedef std::atomic<unsigned int> Type;
 
-    static unsigned int load(type const& counter) noexcept
+    static unsigned int Load(Type const& counter) noexcept
     {
       return static_cast<unsigned int>(static_cast<long>(counter));
     }
 
-    static void increment(type& counter) noexcept
+    static void Increment(Type& counter) noexcept
     {
       ++counter;
     }
 
-    static unsigned int decrement(type& counter) noexcept
+    static unsigned int Decrement(Type& counter) noexcept
     {
       return static_cast<unsigned int>(--counter);
     }
   };
 
-  template<typename CounterPolicy = thread_safe_counter>
-  class ref_counter
+  template<typename Derived, typename CounterPolicy = ThreadSafeCounter>
+  class RefCounter
   {
   public:
-    ref_counter() noexcept
+    RefCounter() noexcept
       : m_ref_counter(0)
     {
 
     }
 
-    ref_counter(ref_counter const&) noexcept
+    RefCounter(RefCounter const&) noexcept
       : m_ref_counter(0)
     {
 
     }
 
-    ref_counter& operator= (ref_counter const&) noexcept { return *this; }
+    RefCounter& operator= (RefCounter const&) noexcept { return *this; }
 
-    void increment() noexcept {
-      CounterPolicy::increment(m_ref_counter);
+    void Increment() noexcept {
+      CounterPolicy::Increment(m_ref_counter);
     }
 
-    void decrement() noexcept {
-      if (CounterPolicy::decrement(m_ref_counter) == 0)
-        release();
+    void Decrement() noexcept {
+      if (CounterPolicy::Decrement(m_ref_counter) == 0)
+        static_cast<Derived*>(this)->Release();
     }
 
-    unsigned int use_count() const noexcept {
-      return CounterPolicy::load(m_ref_counter);
+    unsigned int UseCount() const noexcept {
+      return CounterPolicy::Load(m_ref_counter);
     }
 
   protected:
-    virtual ~ref_counter() = default;
+    ~RefCounter() = default;
 
-    virtual void release() { delete this; }
+    void Release() {
+      delete static_cast<const Derived*>(this);
+    }
 
   private:
-    typedef typename CounterPolicy::type counter_type;
-    counter_type m_ref_counter;
+    typedef typename CounterPolicy::Type CounterType;
+    CounterType m_ref_counter;
   };
 
-#define FORWARD_DEFINE_REF_COUNTER(X) \
-  virtual void increment() noexcept override {\
-    return X::increment();\
-  }\
-  virtual void decrement() noexcept override {\
-    return X::decrement();\
-  }\
-  virtual unsigned int use_count() const noexcept override {\
-    return X::use_count();\
-  }\
+#define FORWARD_DEFINE_REF_COUNTER(X,...) \
+  virtual void Increment() noexcept override { return X, __VA_ARGS__::Increment(); }\
+  virtual void Decrement() noexcept override { return X, __VA_ARGS__::Decrement(); }\
+  virtual unsigned int UseCount() const noexcept override { return X, __VA_ARGS__::UseCount(); }
 
   template<class T>
-  class ref_counter_ptr
+  class RefCounterPtr
   {
   private:
-    typedef ref_counter_ptr this_type;
+    typedef RefCounterPtr ThisType;
 
   public:
-    constexpr ref_counter_ptr() noexcept : px(0)
+    constexpr RefCounterPtr() noexcept : px(0)
     {
     }
 
-    ref_counter_ptr(T* p, bool add_ref = true) : px(p)
+    RefCounterPtr(T* p, bool add_ref = true) : px(p)
     {
-      if (px != 0 && add_ref) px->increment();
+      if (px != 0 && add_ref) px->Increment();
     }
 
     template<class U>
-    ref_counter_ptr(ref_counter_ptr<U> const& rhs, typename detail::enable_if_convertible<U, T>::type = detail::empty())
-      : px(rhs.get())
+    RefCounterPtr(RefCounterPtr<U> const& rhs, typename detail::enable_if_convertible<U, T>::type = detail::empty())
+      : px(rhs.Get())
     {
-      if (px != 0) px->increment();
+      if (px != 0) px->Increment();
     }
 
-    ref_counter_ptr(ref_counter_ptr const& rhs) : px(rhs.px)
+    RefCounterPtr(RefCounterPtr const& rhs) : px(rhs.px)
     {
-      if (px != 0) px->increment();
+      if (px != 0) px->Increment();
     }
 
-    ~ref_counter_ptr()
+    ~RefCounterPtr()
     {
-      if (px != 0) px->decrement();
+      if (px != 0) px->Decrement();
     }
 
-    template<class U> ref_counter_ptr& operator=(ref_counter_ptr<U> const& rhs)
+    template<class U> RefCounterPtr& operator=(RefCounterPtr<U> const& rhs)
     {
-      this_type(rhs).swap(*this);
+      ThisType(rhs).swap(*this);
       return *this;
     }
 
     // Move support
-    ref_counter_ptr(ref_counter_ptr&& rhs) noexcept : px(rhs.px)
+    RefCounterPtr(RefCounterPtr&& rhs) noexcept : px(rhs.px)
     {
       rhs.px = 0;
     }
 
-    ref_counter_ptr& operator=(ref_counter_ptr&& rhs) noexcept
+    RefCounterPtr& operator=(RefCounterPtr&& rhs) noexcept
     {
-      this_type(static_cast<ref_counter_ptr&&>(rhs)).swap(*this);
+      ThisType(static_cast<RefCounterPtr&&>(rhs)).swap(*this);
       return *this;
     }
 
-    template<class U> friend class ref_counter_ptr;
+    template<class U> friend class RefCounterPtr;
 
     template<class U>
-    ref_counter_ptr(ref_counter_ptr<U>&& rhs, typename detail::enable_if_convertible<U, T>::type = detail::empty())
+    RefCounterPtr(RefCounterPtr<U>&& rhs, typename detail::enable_if_convertible<U, T>::type = detail::empty())
       : px(rhs.px)
     {
       rhs.px = 0;
     }
 
     template<class U>
-    ref_counter_ptr& operator=(ref_counter_ptr<U>&& rhs) noexcept
+    RefCounterPtr& operator=(RefCounterPtr<U>&& rhs) noexcept
     {
-      this_type(static_cast<ref_counter_ptr<U>&&>(rhs)).swap(*this);
+      ThisType(static_cast<RefCounterPtr<U>&&>(rhs)).swap(*this);
       return *this;
     }
 
-    ref_counter_ptr& operator=(ref_counter_ptr const& rhs)
+    RefCounterPtr& operator=(RefCounterPtr const& rhs)
     {
-      this_type(rhs).swap(*this);
+      ThisType(rhs).swap(*this);
       return *this;
     }
 
-    ref_counter_ptr& operator=(T* rhs)
+    RefCounterPtr& operator=(T* rhs)
     {
-      this_type(rhs).swap(*this);
+      ThisType(rhs).swap(*this);
       return *this;
     }
 
-    void reset()
+    void Reset()
     {
-      this_type().swap(*this);
+      ThisType().swap(*this);
     }
 
-    void reset(T* rhs)
+    void Reset(T* rhs)
     {
-      this_type(rhs).swap(*this);
+      ThisType(rhs).swap(*this);
     }
 
-    void reset(T* rhs, bool add_ref)
+    void Reset(T* rhs, bool add_ref)
     {
-      this_type(rhs, add_ref).swap(*this);
+      ThisType(rhs, add_ref).swap(*this);
     }
 
-    T* get() const noexcept
+    T* Get() const noexcept
     {
       return px;
     }
 
-    T* detach() noexcept
+    T* Detach() noexcept
     {
       T* ret = px;
       px = 0;
@@ -286,7 +282,7 @@ namespace Cmm
       return px == 0;
     }
 
-    void swap(ref_counter_ptr& rhs) noexcept
+    void swap(RefCounterPtr& rhs) noexcept
     {
       T* tmp = px;
       px = rhs.px;
@@ -297,111 +293,111 @@ namespace Cmm
     T* px;
   };
 
-  template<class T, class U> inline bool operator==(ref_counter_ptr<T> const& a, ref_counter_ptr<U> const& b) noexcept
+  template<class T, class U> inline bool operator==(RefCounterPtr<T> const& a, RefCounterPtr<U> const& b) noexcept
   {
     return a.get() == b.get();
   }
 
-  template<class T, class U> inline bool operator!=(ref_counter_ptr<T> const& a, ref_counter_ptr<U> const& b) noexcept
+  template<class T, class U> inline bool operator!=(RefCounterPtr<T> const& a, RefCounterPtr<U> const& b) noexcept
   {
     return a.get() != b.get();
   }
 
-  template<class T, class U> inline bool operator==(ref_counter_ptr<T> const& a, U* b) noexcept
+  template<class T, class U> inline bool operator==(RefCounterPtr<T> const& a, U* b) noexcept
   {
     return a.get() == b;
   }
 
-  template<class T, class U> inline bool operator!=(ref_counter_ptr<T> const& a, U* b) noexcept
+  template<class T, class U> inline bool operator!=(RefCounterPtr<T> const& a, U* b) noexcept
   {
     return a.get() != b;
   }
 
-  template<class T, class U> inline bool operator==(T* a, ref_counter_ptr<U> const& b) noexcept
+  template<class T, class U> inline bool operator==(T* a, RefCounterPtr<U> const& b) noexcept
   {
     return a == b.get();
   }
 
-  template<class T, class U> inline bool operator!=(T* a, ref_counter_ptr<U> const& b) noexcept
+  template<class T, class U> inline bool operator!=(T* a, RefCounterPtr<U> const& b) noexcept
   {
     return a != b.get();
   }
 
-  template<class T> inline bool operator==(ref_counter_ptr<T> const& p, std::nullptr_t) noexcept
+  template<class T> inline bool operator==(RefCounterPtr<T> const& p, std::nullptr_t) noexcept
   {
     return p.get() == 0;
   }
 
-  template<class T> inline bool operator==(std::nullptr_t, ref_counter_ptr<T> const& p) noexcept
+  template<class T> inline bool operator==(std::nullptr_t, RefCounterPtr<T> const& p) noexcept
   {
     return p.get() == 0;
   }
 
-  template<class T> inline bool operator!=(ref_counter_ptr<T> const& p, std::nullptr_t) noexcept
+  template<class T> inline bool operator!=(RefCounterPtr<T> const& p, std::nullptr_t) noexcept
   {
     return p.get() != 0;
   }
 
-  template<class T> inline bool operator!=(std::nullptr_t, ref_counter_ptr<T> const& p) noexcept
+  template<class T> inline bool operator!=(std::nullptr_t, RefCounterPtr<T> const& p) noexcept
   {
     return p.get() != 0;
   }
 
-  template<class T> inline bool operator<(ref_counter_ptr<T> const& a, ref_counter_ptr<T> const& b) noexcept
+  template<class T> inline bool operator<(RefCounterPtr<T> const& a, RefCounterPtr<T> const& b) noexcept
   {
     return std::less<T*>()(a.get(), b.get());
   }
 
-  template<class T> void swap(ref_counter_ptr<T>& lhs, ref_counter_ptr<T>& rhs) noexcept
+  template<class T> void swap(RefCounterPtr<T>& lhs, RefCounterPtr<T>& rhs) noexcept
   {
     lhs.swap(rhs);
   }
 
   // mem_fn support
-  template<class T> T* get_pointer(ref_counter_ptr<T> const& p) noexcept
+  template<class T> T* get_pointer(RefCounterPtr<T> const& p) noexcept
   {
     return p.get();
   }
 
-  template<class T, class U> ref_counter_ptr<T> static_pointer_cast(ref_counter_ptr<U> const& p)
+  template<class T, class U> RefCounterPtr<T> static_pointer_cast(RefCounterPtr<U> const& p)
   {
     return static_cast<T*>(p.get());
   }
 
-  template<class T, class U> ref_counter_ptr<T> const_pointer_cast(ref_counter_ptr<U> const& p)
+  template<class T, class U> RefCounterPtr<T> const_pointer_cast(RefCounterPtr<U> const& p)
   {
     return const_cast<T*>(p.get());
   }
 
-  template<class T, class U> ref_counter_ptr<T> dynamic_pointer_cast(ref_counter_ptr<U> const& p)
+  template<class T, class U> RefCounterPtr<T> dynamic_pointer_cast(RefCounterPtr<U> const& p)
   {
     return dynamic_cast<T*>(p.get());
   }
 
-  template<class T, class U> ref_counter_ptr<T> static_pointer_cast(ref_counter_ptr<U>&& p) noexcept
+  template<class T, class U> RefCounterPtr<T> static_pointer_cast(RefCounterPtr<U>&& p) noexcept
   {
-    return ref_counter_ptr<T>(static_cast<T*>(p.detach()), false);
+    return RefCounterPtr<T>(static_cast<T*>(p.Detach()), false);
   }
 
-  template<class T, class U> ref_counter_ptr<T> const_pointer_cast(ref_counter_ptr<U>&& p) noexcept
+  template<class T, class U> RefCounterPtr<T> const_pointer_cast(RefCounterPtr<U>&& p) noexcept
   {
-    return ref_counter_ptr<T>(const_cast<T*>(p.detach()), false);
+    return RefCounterPtr<T>(const_cast<T*>(p.Detach()), false);
   }
 
-  template<class T, class U> ref_counter_ptr<T> dynamic_pointer_cast(ref_counter_ptr<U>&& p) noexcept
+  template<class T, class U> RefCounterPtr<T> dynamic_pointer_cast(RefCounterPtr<U>&& p) noexcept
   {
-    T* p2 = dynamic_cast<T*>(p.get());
+    T* p2 = dynamic_cast<T*>(p.Get());
 
-    ref_counter_ptr<T> r(p2, false);
+    RefCounterPtr<T> r(p2, false);
 
-    if (p2) p.detach();
+    if (p2) p.Detach();
 
     return r;
   }
 
-  template<class E, class T, class Y> std::basic_ostream<E, T>& operator<< (std::basic_ostream<E, T>& os, ref_counter_ptr<Y> const& p)
+  template<class E, class T, class Y> std::basic_ostream<E, T>& operator<< (std::basic_ostream<E, T>& os, RefCounterPtr<Y> const& p)
   {
-    os << p.get();
+    os << p.Get();
     return os;
   }
 
@@ -409,11 +405,11 @@ namespace Cmm
 
 namespace std
 {
-  template<class T> struct hash< Cmm::ref_counter_ptr<T> >
+  template<class T> struct hash< Cmm::RefCounterPtr<T> >
   {
-    std::size_t operator()(Cmm::ref_counter_ptr<T> const& p) const noexcept
+    std::size_t operator()(Cmm::RefCounterPtr<T> const& p) const noexcept
     {
-      return std::hash< T* >()(p.get());
+      return std::hash< T* >()(p.Get());
     }
   };
 } // namespace std
@@ -422,9 +418,9 @@ namespace Cmm
 {
   template< class T > struct hash;
 
-  template< class T > std::size_t hash_value(ref_counter_ptr<T> const& p) noexcept
+  template< class T > std::size_t hash_value(RefCounterPtr<T> const& p) noexcept
   {
-    return std::hash< T* >()(p.get());
+    return std::hash< T* >()(p.Get());
   }
 } // namespace Cmm
 
