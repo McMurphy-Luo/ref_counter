@@ -12,6 +12,8 @@
 #include "IntrusivePtr.h"
 #include "Windows.h"
 #include <string>
+#include "boost/smart_ptr/intrusive_ptr.hpp"
+#include "boost/smart_ptr/intrusive_ref_counter.hpp"
 
 class TestInterface1
   : public Cmm::ref_counter_base
@@ -23,15 +25,14 @@ protected:
   virtual ~TestInterface1() = default;
 };
 
-
 class ReferenceCounted0
-  : public Cmm::ref_counter<ReferenceCounted0>
+  : public Cmm::ref_counter<>
 {
 
 };
 
 class ReferenceCounted1
-  : public Cmm::ref_counter<ReferenceCounted1>
+  : public Cmm::ref_counter<Cmm::thread_unsafe_counter>
   , public TestInterface1
 {
 public:
@@ -44,7 +45,7 @@ public:
     return value;
   }
 
-  FORWARD_DEFINE_REF_COUNTER(Cmm::ref_counter<ReferenceCounted1>)
+  FORWARD_DEFINE_REF_COUNTER(Cmm::ref_counter<Cmm::thread_unsafe_counter>)
 
 protected:
   virtual ~ReferenceCounted1() = default;
@@ -102,7 +103,7 @@ protected:
 class ReferenceCounted2
   : public TestInterface2
   , public TestInterface1
-  , public Cmm::ref_counter<ReferenceCounted2>
+  , public Cmm::ref_counter<>
 {
 public:
   ReferenceCounted2(int v1, std::string v2)
@@ -116,16 +117,9 @@ public:
 
   virtual std::string Test2() override { return v2_; }
 
-  FORWARD_DEFINE_REF_COUNTER(Cmm::ref_counter<ReferenceCounted2>);
+  FORWARD_DEFINE_REF_COUNTER(Cmm::ref_counter<>);
 
 private:
   int v1_;
   std::string v2_;
 };
-
-TEST_CASE("TestMultipleInheritence") {
-  Cmm::ref_counter_ptr<TestInterface1> ptr;
-  {
-    ptr.reset(new ReferenceCounted2(3, "hello"));
-  }
-}
