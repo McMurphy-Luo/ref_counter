@@ -105,7 +105,7 @@ namespace Cmm
     }
   };
 
-  template<typename Derived, typename CounterPolicy = ThreadSafeCounter>
+  template<typename CounterPolicy = ThreadSafeCounter>
   class RefCounter
   {
   public:
@@ -129,7 +129,7 @@ namespace Cmm
 
     void Decrement() noexcept {
       if (CounterPolicy::Decrement(m_ref_counter) == 0)
-        static_cast<Derived*>(this)->Release();
+        Release();
     }
 
     unsigned int UseCount() const noexcept {
@@ -137,10 +137,10 @@ namespace Cmm
     }
 
   protected:
-    ~RefCounter() = default;
+    virtual ~RefCounter() = default;
 
-    void Release() {
-      delete static_cast<const Derived*>(this);
+    virtual void Release() {
+      delete this;
     }
 
   private:
@@ -148,10 +148,10 @@ namespace Cmm
     CounterType m_ref_counter;
   };
 
-#define FORWARD_DEFINE_REF_COUNTER(X,...) \
-  virtual void Increment() noexcept override { return X, __VA_ARGS__::Increment(); }\
-  virtual void Decrement() noexcept override { return X, __VA_ARGS__::Decrement(); }\
-  virtual unsigned int UseCount() const noexcept override { return X, __VA_ARGS__::UseCount(); }
+#define FORWARD_DEFINE_REF_COUNTER(X) \
+  virtual void Increment() noexcept override { return X::Increment(); }\
+  virtual void Decrement() noexcept override { return X::Decrement(); }\
+  virtual unsigned int UseCount() const noexcept override { return X::UseCount(); }\
 
   template<class T>
   class RefCounterPtr

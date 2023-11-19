@@ -19,7 +19,7 @@ using Cmm::ThreadUnsafeCounter;
 using Cmm::ThreadSafeCounter;
 
 class ReferenceCounted0
-  : public RefCounter<ReferenceCounted0>
+  : public RefCounter<>
 {
 
 };
@@ -35,7 +35,7 @@ protected:
 };
 
 class ReferenceCounted1
-  : public RefCounter<ReferenceCounted1, ThreadUnsafeCounter>
+  : public RefCounter<ThreadUnsafeCounter>
   , public TestInterface1
 {
 public:
@@ -48,7 +48,10 @@ public:
     return value;
   }
 
-  FORWARD_DEFINE_REF_COUNTER(RefCounter<ReferenceCounted1, ThreadUnsafeCounter>);
+  FORWARD_DEFINE_REF_COUNTER(RefCounter<ThreadUnsafeCounter>);
+
+protected:
+  virtual ~ReferenceCounted1() = default;
 
 private:
   std::unique_ptr<std::string> leak_detector_{ new std::string("hello") };
@@ -68,7 +71,7 @@ protected:
 class ReferenceCounted2
   : public TestInterface2
   , public TestInterface1
-  , public RefCounter<ReferenceCounted2>
+  , public RefCounter<>
 {
 public:
   ReferenceCounted2(int v1, std::string v2)
@@ -82,7 +85,7 @@ public:
 
   virtual std::string Test2() override { return *v2_; }
 
-  FORWARD_DEFINE_REF_COUNTER(RefCounter<ReferenceCounted2>);
+  FORWARD_DEFINE_REF_COUNTER(RefCounter<>);
 
 private:
   int v1_;
@@ -140,7 +143,7 @@ TEST_CASE("Test Interface Based Reference Counting") {
 
 class CustomDeletor
   : public TestInterface1
-  , public RefCounter<CustomDeletor, ThreadUnsafeCounter>
+  , public RefCounter<ThreadUnsafeCounter>
 {
 public:
   static CustomDeletor* instance;
@@ -151,14 +154,17 @@ public:
   {
   }
 
-  void Release() {
-    instance = this;
-  }
-
-  FORWARD_DEFINE_REF_COUNTER(RefCounter<CustomDeletor, ThreadUnsafeCounter>);
+  FORWARD_DEFINE_REF_COUNTER(RefCounter<ThreadUnsafeCounter>);
 
   virtual int Test1() override {
     return v_;
+  }
+
+protected:
+  virtual ~CustomDeletor() = default;
+
+  void Release() {
+    instance = this;
   }
 
 private:
