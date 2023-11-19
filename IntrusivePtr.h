@@ -295,57 +295,57 @@ namespace Cmm
 
   template<class T, class U> inline bool operator==(RefCounterPtr<T> const& a, RefCounterPtr<U> const& b) noexcept
   {
-    return a.get() == b.get();
+    return a.Get() == b.Get();
   }
 
   template<class T, class U> inline bool operator!=(RefCounterPtr<T> const& a, RefCounterPtr<U> const& b) noexcept
   {
-    return a.get() != b.get();
+    return a.Get() != b.Get();
   }
 
   template<class T, class U> inline bool operator==(RefCounterPtr<T> const& a, U* b) noexcept
   {
-    return a.get() == b;
+    return a.Get() == b;
   }
 
   template<class T, class U> inline bool operator!=(RefCounterPtr<T> const& a, U* b) noexcept
   {
-    return a.get() != b;
+    return a.Get() != b;
   }
 
   template<class T, class U> inline bool operator==(T* a, RefCounterPtr<U> const& b) noexcept
   {
-    return a == b.get();
+    return a == b.Get();
   }
 
   template<class T, class U> inline bool operator!=(T* a, RefCounterPtr<U> const& b) noexcept
   {
-    return a != b.get();
+    return a != b.Get();
   }
 
   template<class T> inline bool operator==(RefCounterPtr<T> const& p, std::nullptr_t) noexcept
   {
-    return p.get() == 0;
+    return p.Get() == 0;
   }
 
   template<class T> inline bool operator==(std::nullptr_t, RefCounterPtr<T> const& p) noexcept
   {
-    return p.get() == 0;
+    return p.Get() == 0;
   }
 
   template<class T> inline bool operator!=(RefCounterPtr<T> const& p, std::nullptr_t) noexcept
   {
-    return p.get() != 0;
+    return p.Get() != 0;
   }
 
   template<class T> inline bool operator!=(std::nullptr_t, RefCounterPtr<T> const& p) noexcept
   {
-    return p.get() != 0;
+    return p.Get() != 0;
   }
 
   template<class T> inline bool operator<(RefCounterPtr<T> const& a, RefCounterPtr<T> const& b) noexcept
   {
-    return std::less<T*>()(a.get(), b.get());
+    return std::less<T*>()(a.Get(), b.Get());
   }
 
   template<class T> void swap(RefCounterPtr<T>& lhs, RefCounterPtr<T>& rhs) noexcept
@@ -356,22 +356,22 @@ namespace Cmm
   // mem_fn support
   template<class T> T* get_pointer(RefCounterPtr<T> const& p) noexcept
   {
-    return p.get();
+    return p.Get();
   }
 
   template<class T, class U> RefCounterPtr<T> static_pointer_cast(RefCounterPtr<U> const& p)
   {
-    return static_cast<T*>(p.get());
+    return static_cast<T*>(p.Get());
   }
 
   template<class T, class U> RefCounterPtr<T> const_pointer_cast(RefCounterPtr<U> const& p)
   {
-    return const_cast<T*>(p.get());
+    return const_cast<T*>(p.Get());
   }
 
   template<class T, class U> RefCounterPtr<T> dynamic_pointer_cast(RefCounterPtr<U> const& p)
   {
-    return dynamic_cast<T*>(p.get());
+    return dynamic_cast<T*>(p.Get());
   }
 
   template<class T, class U> RefCounterPtr<T> static_pointer_cast(RefCounterPtr<U>&& p) noexcept
