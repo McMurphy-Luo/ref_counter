@@ -11,6 +11,8 @@
 #include "catch.hpp"
 #include "IntrusivePtr.h"
 #include <string>
+#include <unordered_map>
+#include <memory>
 
 using Cmm::RefCounter;
 using Cmm::RefCounterBase;
@@ -70,11 +72,31 @@ protected:
 
 class ReferenceCounted2
   : public TestInterface2
+  , public RefCounter<ThreadUnsafeCounter>
+{
+public:
+  ReferenceCounted2(std::string v) : v_(v) {
+
+  }
+
+  virtual std::string Test2() override { return v_; }
+
+  FORWARD_DEFINE_REF_COUNTER(RefCounter<ThreadUnsafeCounter>);
+
+protected:
+  virtual ~ReferenceCounted2() = default;
+
+private:
+  std::string v_;
+};
+
+class ReferenceCounted3
+  : public TestInterface2
   , public TestInterface1
   , public RefCounter<>
 {
 public:
-  ReferenceCounted2(int v1, std::string v2)
+  ReferenceCounted3(int v1, std::string v2)
     : v1_(v1)
     , v2_(std::make_unique<std::string>(v2))
   {
@@ -128,17 +150,25 @@ TEST_CASE("Test Interface Based Reference Counting") {
     CHECK(ptr->UseCount() == 5);
   }
   RefCounterPtr<TestInterface1> move_result = std::move(ptr);
+  CHECK(move_result != ptr);
+  CHECK(nullptr == ptr);
   CHECK(!ptr);
   CHECK(move_result->UseCount() == 1);
-  RefCounterPtr<ReferenceCounted2> true_object(new ReferenceCounted2(98, "Hello"));
-  ptr = true_object;
+}
+
+TEST_CASE("Test Multiple Interface") {
+  RefCounterPtr<ReferenceCounted3> true_object(new ReferenceCounted3(98, "Hello"));
+  true_object = true_object;
+  CHECK(true_object->UseCount() == 1);
+  RefCounterPtr<TestInterface1> ptr = true_object;
   CHECK(ptr->UseCount() == 2);
   CHECK(ptr->Test1() == 98);
-  move_result = ptr;
-  CHECK(move_result->Test1() == 98);
-  CHECK(move_result->UseCount() == 3);
+  RefCounterPtr<TestInterface2> move_result(std::move(true_object));
+  CHECK(!true_object);
+  CHECK(ptr->UseCount() == 2);
+  CHECK(move_result->Test2() == "Hello");
+  CHECK(move_result->UseCount() == 2);
   RefCounterPtr<TestInterface2> another = true_object;
-  CHECK(ptr->UseCount() == 4);
 }
 
 class CustomDeletor
@@ -163,17 +193,13 @@ public:
 protected:
   virtual ~CustomDeletor() = default;
 
-  void Release() {
+  virtual void Release() override {
     instance = this;
   }
 
 private:
   int v_;
 };
-
-void Release(CustomDeletor* p) {
-  CustomDeletor::instance = p;
-}
 
 CustomDeletor* CustomDeletor::instance = nullptr;
 
@@ -187,4 +213,18 @@ TEST_CASE("Test Custom Deletor") {
   CHECK(raw->Test1() == 46);
   free(CustomDeletor::instance);
   raw = nullptr;
+}
+
+TEST_CASE("Test Unordered Map") {
+  std::unordered_map<RefCounterPtr<TestInterface2>, int> container;
+  RefCounterPtr<TestInterface2> obj(new ReferenceCounted2("1"));
+  container.emplace(obj, 1);
+  obj = new ReferenceCounted3(2, "2");
+  container.emplace(obj, 2);
+  obj = new ReferenceCounted2("3");
+  container.emplace(obj, 3);
+  obj = new ReferenceCounted3(4, "4");
+  container.emplace(obj, 4);
+  CHECK(obj->UseCount() == 2);
+  obj.Reset();
 }

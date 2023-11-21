@@ -2,64 +2,17 @@
 #define REF_COUNTER_H_
 
 #include <atomic>
+#include <type_traits>
 
 namespace Cmm
 {
-  namespace detail
-  {
-    template< class Y, class T > struct convertible
-    {
-      typedef char(&yes)[1];
-      typedef char(&no)[2];
-
-      static yes f(T*);
-      static no  f(...);
-
-      enum vt { value = sizeof((f)(static_cast<Y*>(0))) == sizeof(yes) };
-    };
-
-    template< class Y, class T > struct convertible< Y, T[] >
-    {
-      enum vt { value = false };
-    };
-
-    template< class Y, class T > struct convertible< Y[], T[] >
-    {
-      enum vt { value = convertible< Y[1], T[1] >::value };
-    };
-
-    template< class Y, std::size_t N, class T > struct convertible< Y[N], T[] >
-    {
-      enum vt { value = convertible< Y[1], T[1] >::value };
-    };
-
-    struct empty
-    {
-    };
-
-    template< bool > struct enable_if_convertible_impl;
-
-    template<> struct enable_if_convertible_impl<true>
-    {
-      typedef empty type;
-    };
-
-    template<> struct enable_if_convertible_impl<false>
-    {
-    };
-
-    template< class Y, class T > struct enable_if_convertible : public enable_if_convertible_impl< convertible< Y, T >::value >
-    {
-    };
-  } // namespace detail
-
   class RefCounterBase {
   public:
-    virtual void Increment() noexcept = 0;
+    virtual void Increment() = 0;
 
-    virtual void Decrement() noexcept = 0;
+    virtual void Decrement() = 0;
 
-    virtual unsigned int UseCount() const noexcept = 0;
+    virtual unsigned int UseCount() const = 0;
 
   protected:
     virtual ~RefCounterBase() = default;
@@ -91,7 +44,7 @@ namespace Cmm
 
     static unsigned int Load(Type const& counter) noexcept
     {
-      return static_cast<unsigned int>(static_cast<long>(counter));
+      return counter.load();
     }
 
     static void Increment(Type& counter) noexcept
@@ -101,7 +54,7 @@ namespace Cmm
 
     static unsigned int Decrement(Type& counter) noexcept
     {
-      return static_cast<unsigned int>(--counter);
+      return --counter;
     }
   };
 
@@ -127,7 +80,7 @@ namespace Cmm
       CounterPolicy::Increment(m_ref_counter);
     }
 
-    void Decrement() noexcept {
+    void Decrement() {
       if (CounterPolicy::Decrement(m_ref_counter) == 0)
         Release();
     }
@@ -149,9 +102,9 @@ namespace Cmm
   };
 
 #define FORWARD_DEFINE_REF_COUNTER(X) \
-  virtual void Increment() noexcept override { return X::Increment(); }\
-  virtual void Decrement() noexcept override { return X::Decrement(); }\
-  virtual unsigned int UseCount() const noexcept override { return X::UseCount(); }\
+  virtual void Increment() override { return X::Increment(); }\
+  virtual void Decrement() override { return X::Decrement(); }\
+  virtual unsigned int UseCount() const override { return X::UseCount(); }\
 
   template<class T>
   class RefCounterPtr
@@ -169,8 +122,8 @@ namespace Cmm
       if (px != 0 && add_ref) px->Increment();
     }
 
-    template<class U>
-    RefCounterPtr(RefCounterPtr<U> const& rhs, typename detail::enable_if_convertible<U, T>::type = detail::empty())
+    template<class U, std::enable_if_t<std::is_convertible_v<U*, T*>, int> = 0>
+    RefCounterPtr(RefCounterPtr<U> const& rhs)
       : px(rhs.Get())
     {
       if (px != 0) px->Increment();
@@ -206,8 +159,8 @@ namespace Cmm
 
     template<class U> friend class RefCounterPtr;
 
-    template<class U>
-    RefCounterPtr(RefCounterPtr<U>&& rhs, typename detail::enable_if_convertible<U, T>::type = detail::empty())
+    template<class U, std::enable_if_t<std::is_convertible_v<U*, T*>, int> = 0>
+    RefCounterPtr(RefCounterPtr<U>&& rhs)
       : px(rhs.px)
     {
       rhs.px = 0;
