@@ -2,7 +2,9 @@
 #define REF_COUNTER_H_
 
 #include <atomic>
+#include <ostream>
 #include <type_traits>
+#include <functional>
 
 namespace Cmm
 {
@@ -122,7 +124,7 @@ namespace Cmm
       if (px != 0 && add_ref) px->Increment();
     }
 
-    template<class U, std::enable_if_t<std::is_convertible_v<U*, T*>, int> = 0>
+    template<class U, std::enable_if_t<std::is_convertible<U*, T*>::value, int> = 0>
     RefCounterPtr(RefCounterPtr<U> const& rhs)
       : px(rhs.Get())
     {
@@ -159,7 +161,7 @@ namespace Cmm
 
     template<class U> friend class RefCounterPtr;
 
-    template<class U, std::enable_if_t<std::is_convertible_v<U*, T*>, int> = 0>
+    template<class U, std::enable_if_t<std::is_convertible<U*, T*>::value, int> = 0>
     RefCounterPtr(RefCounterPtr<U>&& rhs)
       : px(rhs.px)
     {
