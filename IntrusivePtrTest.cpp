@@ -13,6 +13,7 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include <iostream>
 
 using Cmm::RefCounter;
 using Cmm::RefCounterBase;
@@ -227,4 +228,12 @@ TEST_CASE("Test Unordered Map") {
   container.emplace(obj, 4);
   CHECK(obj->UseCount() == 2);
   obj.Reset();
+}
+
+TEST_CASE("Test STL compatibility") {
+  RefCounterPtr<TestInterface1> obj;
+  std::cout << obj << std::endl;
+  obj.Reset(new ReferenceCounted1(5));
+  std::cout << obj << std::endl;
+  std::cout << std::hash<RefCounterPtr<TestInterface1>>()(obj) << std::endl;
 }
