@@ -16,7 +16,6 @@
 #include <iostream>
 
 using Cmm::RefCounter;
-using Cmm::RefCounterBase;
 using Cmm::RefCounterPtr;
 using Cmm::ThreadUnsafeCounter;
 using Cmm::ThreadSafeCounter;
@@ -28,7 +27,7 @@ class ReferenceCounted0
 };
 
 class TestInterface1
-  : public RefCounterBase
+  : virtual public RefCounter<ThreadSafeCounter>
 {
 public:
   virtual int Test1() = 0;
@@ -38,8 +37,7 @@ protected:
 };
 
 class ReferenceCounted1
-  : public RefCounter<ThreadUnsafeCounter>
-  , public TestInterface1
+  : public TestInterface1
 {
 public:
   ReferenceCounted1(int v) : value(v)
@@ -51,8 +49,6 @@ public:
     return value;
   }
 
-  FORWARD_DEFINE_REF_COUNTER(RefCounter<ThreadUnsafeCounter>);
-
 protected:
   virtual ~ReferenceCounted1() = default;
 
@@ -62,7 +58,7 @@ private:
 };
 
 class TestInterface2
-  : public RefCounterBase
+  : virtual public RefCounter<ThreadSafeCounter>
 {
 public:
   virtual std::string Test2() = 0;
@@ -73,7 +69,6 @@ protected:
 
 class ReferenceCounted2
   : public TestInterface2
-  , public RefCounter<ThreadUnsafeCounter>
 {
 public:
   ReferenceCounted2(std::string v) : v_(v) {
@@ -81,8 +76,6 @@ public:
   }
 
   virtual std::string Test2() override { return v_; }
-
-  FORWARD_DEFINE_REF_COUNTER(RefCounter<ThreadUnsafeCounter>);
 
 protected:
   virtual ~ReferenceCounted2() = default;
@@ -94,7 +87,6 @@ private:
 class ReferenceCounted3
   : public TestInterface2
   , public TestInterface1
-  , public RefCounter<>
 {
 public:
   ReferenceCounted3(int v1, std::string v2)
@@ -108,8 +100,6 @@ public:
 
   virtual std::string Test2() override { return *v2_; }
 
-  FORWARD_DEFINE_REF_COUNTER(RefCounter<>);
-
 private:
   int v1_;
   std::unique_ptr<std::string> v2_;
@@ -118,6 +108,7 @@ private:
 TEST_CASE("BasicTest") {
   RefCounterPtr<ReferenceCounted0> ptr;
   ptr.Reset(new ReferenceCounted0());
+  ptr = ptr;
   ptr.Reset();
   ReferenceCounted0 second_one;
   ReferenceCounted0 third_one = second_one;
@@ -184,8 +175,6 @@ public:
     : v_(v)
   {
   }
-
-  FORWARD_DEFINE_REF_COUNTER(RefCounter<ThreadUnsafeCounter>);
 
   virtual int Test1() override {
     return v_;

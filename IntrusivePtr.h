@@ -8,18 +8,6 @@
 
 namespace Cmm
 {
-  class RefCounterBase {
-  public:
-    virtual void Increment() = 0;
-
-    virtual void Decrement() = 0;
-
-    virtual unsigned int UseCount() const = 0;
-
-  protected:
-    virtual ~RefCounterBase() = default;
-  };
-
   struct ThreadUnsafeCounter
   {
     typedef unsigned int Type;
@@ -102,11 +90,6 @@ namespace Cmm
     typedef typename CounterPolicy::Type CounterType;
     CounterType m_ref_counter;
   };
-
-#define FORWARD_DEFINE_REF_COUNTER(X) \
-  virtual void Increment() override { return X::Increment(); }\
-  virtual void Decrement() override { return X::Decrement(); }\
-  virtual unsigned int UseCount() const override { return X::UseCount(); }\
 
   template<class T>
   class RefCounterPtr
@@ -207,7 +190,7 @@ namespace Cmm
       return px;
     }
 
-    T* Detach() noexcept
+    [[nodiscard]] T* Detach() noexcept
     {
       T* ret = px;
       px = 0;
