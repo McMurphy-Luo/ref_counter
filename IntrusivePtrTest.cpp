@@ -15,10 +15,10 @@
 #include <memory>
 #include <iostream>
 
-using Cmm::RefCounter;
-using Cmm::RefCounterPtr;
-using Cmm::ThreadUnsafeCounter;
-using Cmm::ThreadSafeCounter;
+using neo::RefCounter;
+using neo::RefCounterPtr;
+using neo::ThreadUnsafeCounter;
+using neo::ThreadSafeCounter;
 
 class ReferenceCounted0
   : public RefCounter<>
@@ -85,8 +85,8 @@ private:
 };
 
 class ReferenceCounted3
-  : public TestInterface2
-  , public TestInterface1
+  : virtual public TestInterface2
+  , virtual public TestInterface1
 {
 public:
   ReferenceCounted3(int v1, std::string v2)
@@ -165,7 +165,6 @@ TEST_CASE("Test Multiple Interface") {
 
 class CustomDeletor
   : public TestInterface1
-  , public RefCounter<ThreadUnsafeCounter>
 {
 public:
   static CustomDeletor* instance;

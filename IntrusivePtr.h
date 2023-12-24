@@ -6,7 +6,7 @@
 #include <type_traits>
 #include <functional>
 
-namespace Cmm
+namespace neo
 {
   struct ThreadUnsafeCounter
   {
@@ -339,20 +339,20 @@ namespace Cmm
     return os;
   }
 
-} // namespace Cmm
+} // namespace neo
 
 namespace std
 {
-  template<class T> struct hash< Cmm::RefCounterPtr<T> >
+  template<class T> struct hash< neo::RefCounterPtr<T> >
   {
-    std::size_t operator()(Cmm::RefCounterPtr<T> const& p) const noexcept
+    std::size_t operator()(neo::RefCounterPtr<T> const& p) const noexcept
     {
       return std::hash< T* >()(p.Get());
     }
   };
 } // namespace std
 
-namespace Cmm
+namespace neo
 {
   template< class T > struct hash;
 
@@ -360,6 +360,6 @@ namespace Cmm
   {
     return std::hash< T* >()(p.Get());
   }
-} // namespace Cmm
+} // namespace neo
 
 #endif // REF_COUNTER_H_
