@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <memory>
 #include <iostream>
+#include <sstream>
 
 using neo::RefCounter;
 using neo::RefCounterPtr;
@@ -24,6 +25,8 @@ class ReferenceCounted0
   : public RefCounter<>
 {
 
+protected:
+  virtual ~ReferenceCounted0() = default;
 };
 
 class TestInterface1
@@ -110,10 +113,12 @@ TEST_CASE("BasicTest") {
   ptr.Reset(new ReferenceCounted0());
   ptr = ptr;
   ptr.Reset();
-  ReferenceCounted0 second_one;
-  ReferenceCounted0 third_one = second_one;
-  CHECK(second_one.UseCount() == 0);
-  CHECK(third_one.UseCount() == 0);
+  ptr = new ReferenceCounted0;
+  ReferenceCounted0* raw = ptr.Detach();
+  CHECK(raw->UseCount() == 1);
+  ptr = raw;
+  CHECK(ptr->UseCount() == 2);
+  raw->Decrement();
 }
 
 TEST_CASE("Test Interface Based Reference Counting") {
@@ -169,35 +174,45 @@ class CustomDeletor
 public:
   static CustomDeletor* instance;
 
-public:
-  CustomDeletor(int v)
-    : v_(v)
-  {
+  static CustomDeletor* GetInstance() {
+    if (instance) {
+      instance = nullptr;
+      return instance;
+    }
+    return new CustomDeletor;
   }
 
+public:
   virtual int Test1() override {
     return v_;
   }
 
+  void SetValue(int v) {
+    v_ = v;
+  }
+
 protected:
   virtual ~CustomDeletor() = default;
+
+  CustomDeletor() = default;
 
   virtual void Release() override {
     instance = this;
   }
 
 private:
-  int v_;
+  int v_ = 0;
 };
 
 CustomDeletor* CustomDeletor::instance = nullptr;
 
 TEST_CASE("Test Custom Deletor") {
   CHECK(nullptr == CustomDeletor::instance);
-  RefCounterPtr<TestInterface1> ptr(new CustomDeletor(46));
+  RefCounterPtr<TestInterface1> ptr(CustomDeletor::GetInstance());
   TestInterface1* raw = ptr.Get();
   ptr.Reset();
   CHECK(CustomDeletor::instance == raw);
+  dynamic_cast<CustomDeletor*>(raw)->SetValue(46);
   CHECK(raw->UseCount() == 0);
   CHECK(raw->Test1() == 46);
   free(CustomDeletor::instance);
@@ -220,8 +235,20 @@ TEST_CASE("Test Unordered Map") {
 
 TEST_CASE("Test STL compatibility") {
   RefCounterPtr<TestInterface1> obj;
-  std::cout << obj << std::endl;
+  std::ostringstream test_stream;
+  test_stream << obj;
+  CHECK(atoi(test_stream.str().c_str()) == 0);
+  test_stream.str("");
   obj.Reset(new ReferenceCounted1(5));
-  std::cout << obj << std::endl;
-  std::cout << std::hash<RefCounterPtr<TestInterface1>>()(obj) << std::endl;
+  test_stream << obj;
+  std::string str = test_stream.str();
+  test_stream.str("");
+  test_stream << obj.Get();
+  CHECK(str == test_stream.str());
+  test_stream.str("");
+  test_stream << std::hash<RefCounterPtr<TestInterface1>>()(obj);
+  str = test_stream.str();
+  test_stream.str("");
+  test_stream << std::hash<TestInterface1*>()(obj.Get());
+  CHECK(test_stream.str() == str);
 }
