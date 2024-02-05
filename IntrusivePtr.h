@@ -107,7 +107,7 @@ namespace neo
       if (px != 0 && add_ref) px->Increment();
     }
 
-    template<class U, std::enable_if_t<std::is_convertible<U*, T*>::value, int> = 0>
+    template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
     RefCounterPtr(RefCounterPtr<U> const& rhs)
       : px(rhs.Get())
     {
@@ -144,7 +144,7 @@ namespace neo
 
     template<class U> friend class RefCounterPtr;
 
-    template<class U, std::enable_if_t<std::is_convertible<U*, T*>::value, int> = 0>
+    template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
     RefCounterPtr(RefCounterPtr<U>&& rhs)
       : px(rhs.px)
     {
