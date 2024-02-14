@@ -196,7 +196,7 @@ protected:
 
   CustomDeletor() = default;
 
-  virtual void Release() override {
+  virtual void OnFinalDestroy() override {
     instance = this;
   }
 

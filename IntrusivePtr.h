@@ -72,7 +72,7 @@ namespace neo
 
     void Decrement() {
       if (CounterPolicy::Decrement(m_ref_counter) == 0)
-        Release();
+        OnFinalDestroy();
     }
 
     unsigned int UseCount() const noexcept {
@@ -82,7 +82,7 @@ namespace neo
   protected:
     virtual ~RefCounter() = default;
 
-    virtual void Release() {
+    virtual void OnFinalDestroy() {
       delete this;
     }
 
