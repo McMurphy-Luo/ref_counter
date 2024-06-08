@@ -22,8 +22,9 @@
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{b263d049-908e-4dc8-a179-6ff4374fbebf}</ProjectGuid>
-    <RootNamespace>IntrusivePtr</RootNamespace>
+    <RootNamespace>ref_counter</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>ref_counter</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -128,10 +129,10 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="catch.hpp" />
-    <ClInclude Include="IntrusivePtr.h" />
+    <ClInclude Include="ref_counter.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="IntrusivePtrTest.cpp" />
+    <ClCompile Include="ref_counter_test.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

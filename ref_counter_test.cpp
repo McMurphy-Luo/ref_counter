@@ -9,7 +9,7 @@
 #endif // _DEBUG
 
 #include "catch.hpp"
-#include "IntrusivePtr.h"
+#include "ref_counter.h"
 #include <string>
 #include <unordered_map>
 #include <memory>
