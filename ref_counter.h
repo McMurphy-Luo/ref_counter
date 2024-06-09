@@ -6,7 +6,7 @@
 #include <type_traits>
 #include <functional>
 
-namespace neo
+namespace ref_counter
 {
   struct ThreadUnsafeCounter
   {
@@ -343,16 +343,16 @@ namespace neo
 
 namespace std
 {
-  template<class T> struct hash< neo::RefCounterPtr<T> >
+  template<class T> struct hash< ref_counter::RefCounterPtr<T> >
   {
-    std::size_t operator()(neo::RefCounterPtr<T> const& p) const noexcept
+    std::size_t operator()(ref_counter::RefCounterPtr<T> const& p) const noexcept
     {
       return std::hash< T* >()(p.Get());
     }
   };
 } // namespace std
 
-namespace neo
+namespace ref_counter
 {
   template< class T > struct hash;
 

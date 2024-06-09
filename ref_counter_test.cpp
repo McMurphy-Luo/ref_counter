@@ -16,10 +16,10 @@
 #include <iostream>
 #include <sstream>
 
-using neo::RefCounter;
-using neo::RefCounterPtr;
-using neo::ThreadUnsafeCounter;
-using neo::ThreadSafeCounter;
+using ref_counter::RefCounter;
+using ref_counter::RefCounterPtr;
+using ref_counter::ThreadUnsafeCounter;
+using ref_counter::ThreadSafeCounter;
 
 class ReferenceCounted0
   : public RefCounter<>
