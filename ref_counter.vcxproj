@@ -128,12 +128,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="catch.hpp" />
+    <ClInclude Include="catch_amalgamated.hpp" />
     <ClInclude Include="ref_counter.h" />
+    <ClInclude Include="ref_counter_test.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="catch_amalgamated.cpp" />
     <ClCompile Include="ref_counter_test.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ref_weak_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

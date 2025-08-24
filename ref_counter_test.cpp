@@ -1,14 +1,5 @@
-#ifdef _DEBUG
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#include <cassert>
-#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )
-// Replace _NORMAL_BLOCK with _CLIENT_BLOCK if you want the
-// allocations to be of _CLIENT_BLOCK type
-#endif // _DEBUG
-
-#include "catch.hpp"
+#include "ref_counter_test.h"
+#include "catch_amalgamated.hpp"
 #include "ref_counter.h"
 #include <string>
 #include <unordered_map>
@@ -16,13 +7,8 @@
 #include <iostream>
 #include <sstream>
 
-using ref_counter::RefCounter;
-using ref_counter::RefCounterPtr;
-using ref_counter::ThreadUnsafeCounter;
-using ref_counter::ThreadSafeCounter;
-
 class ReferenceCounted0
-  : public RefCounter<>
+  : public ref_counter
 {
 
 protected:
@@ -30,7 +16,7 @@ protected:
 };
 
 class TestInterface1
-  : virtual public RefCounter<ThreadSafeCounter>
+  : virtual public ref_counter
 {
 public:
   virtual int Test1() = 0;
@@ -61,7 +47,7 @@ private:
 };
 
 class TestInterface2
-  : virtual public RefCounter<ThreadSafeCounter>
+  : virtual public ref_counter
 {
 public:
   virtual std::string Test2() = 0;
@@ -109,63 +95,63 @@ private:
 };
 
 TEST_CASE("BasicTest") {
-  RefCounterPtr<ReferenceCounted0> ptr;
-  ptr.Reset(new ReferenceCounted0());
+  ref_counter_ptr<ReferenceCounted0> ptr;
+  ptr.reset(new ReferenceCounted0());
   ptr = ptr;
-  ptr.Reset();
+  ptr.reset();
   ptr = new ReferenceCounted0;
-  ReferenceCounted0* raw = ptr.Detach();
-  CHECK(raw->UseCount() == 1);
+  ReferenceCounted0* raw = ptr.detach();
+  CHECK(raw->use_count() == 1);
   ptr = raw;
-  CHECK(ptr->UseCount() == 2);
-  raw->Decrement();
+  CHECK(ptr->use_count() == 2);
+  raw->decrement();
 }
 
 TEST_CASE("Test Interface Based Reference Counting") {
-  RefCounterPtr<TestInterface1> ptr;
+  ref_counter_ptr<TestInterface1> ptr;
   CHECK(!ptr);
-  ptr.Reset(new ReferenceCounted1(5));
+  ptr.reset(new ReferenceCounted1(5));
   CHECK(ptr);
   CHECK(ptr->Test1() == 5);
-  CHECK(ptr->UseCount() == 1);
-  ptr.Reset();
+  CHECK(ptr->use_count() == 1);
+  ptr.reset();
   CHECK(!ptr);
-  ptr.Reset(new ReferenceCounted1(6));
+  ptr.reset(new ReferenceCounted1(6));
   CHECK(ptr);
   CHECK(ptr->Test1() == 6);
   {
-    RefCounterPtr<TestInterface1> another = ptr;
-    CHECK(ptr->UseCount() == 2);
+    ref_counter_ptr<TestInterface1> another = ptr;
+    CHECK(ptr->use_count() == 2);
   }
-  CHECK(ptr->UseCount() == 1);
+  CHECK(ptr->use_count() == 1);
   {
-    std::vector<RefCounterPtr<TestInterface1>> container;
+    std::vector<ref_counter_ptr<TestInterface1>> container;
     container.push_back(ptr);
     container.push_back(ptr);
     container.push_back(ptr);
     container.push_back(ptr);
-    CHECK(ptr->UseCount() == 5);
+    CHECK(ptr->use_count() == 5);
   }
-  RefCounterPtr<TestInterface1> move_result = std::move(ptr);
+  ref_counter_ptr<TestInterface1> move_result = std::move(ptr);
   CHECK(move_result != ptr);
   CHECK(nullptr == ptr);
   CHECK(!ptr);
-  CHECK(move_result->UseCount() == 1);
+  CHECK(move_result->use_count() == 1);
 }
 
 TEST_CASE("Test Multiple Interface") {
-  RefCounterPtr<ReferenceCounted3> true_object(new ReferenceCounted3(98, "Hello"));
+  ref_counter_ptr<ReferenceCounted3> true_object(new ReferenceCounted3(98, "Hello"));
   true_object = true_object;
-  CHECK(true_object->UseCount() == 1);
-  RefCounterPtr<TestInterface1> ptr = true_object;
-  CHECK(ptr->UseCount() == 2);
+  CHECK(true_object->use_count() == 1);
+  ref_counter_ptr<TestInterface1> ptr = true_object;
+  CHECK(ptr->use_count() == 2);
   CHECK(ptr->Test1() == 98);
-  RefCounterPtr<TestInterface2> move_result(std::move(true_object));
+  ref_counter_ptr<TestInterface2> move_result(std::move(true_object));
   CHECK(!true_object);
-  CHECK(ptr->UseCount() == 2);
+  CHECK(ptr->use_count() == 2);
   CHECK(move_result->Test2() == "Hello");
-  CHECK(move_result->UseCount() == 2);
-  RefCounterPtr<TestInterface2> another = true_object;
+  CHECK(move_result->use_count() == 2);
+  ref_counter_ptr<TestInterface2> another = true_object;
 }
 
 class CustomDeletor
@@ -196,7 +182,7 @@ protected:
 
   CustomDeletor() = default;
 
-  virtual void OnFinalDestroy() override {
+  virtual void on_final_destroy() override {
     instance = this;
   }
 
@@ -208,20 +194,20 @@ CustomDeletor* CustomDeletor::instance = nullptr;
 
 TEST_CASE("Test Custom Deletor") {
   CHECK(nullptr == CustomDeletor::instance);
-  RefCounterPtr<TestInterface1> ptr(CustomDeletor::GetInstance());
-  TestInterface1* raw = ptr.Get();
-  ptr.Reset();
+  ref_counter_ptr<TestInterface1> ptr(CustomDeletor::GetInstance());
+  TestInterface1* raw = ptr.get();
+  ptr.reset();
   CHECK(CustomDeletor::instance == raw);
   dynamic_cast<CustomDeletor*>(raw)->SetValue(46);
-  CHECK(raw->UseCount() == 0);
+  CHECK(raw->use_count() == 0);
   CHECK(raw->Test1() == 46);
   free(CustomDeletor::instance);
   raw = nullptr;
 }
 
 TEST_CASE("Test Unordered Map") {
-  std::unordered_map<RefCounterPtr<TestInterface2>, int> container;
-  RefCounterPtr<TestInterface2> obj(new ReferenceCounted2("1"));
+  std::unordered_map<ref_counter_ptr<TestInterface2>, int> container;
+  ref_counter_ptr<TestInterface2> obj(new ReferenceCounted2("1"));
   container.emplace(obj, 1);
   obj = new ReferenceCounted3(2, "2");
   container.emplace(obj, 2);
@@ -229,26 +215,26 @@ TEST_CASE("Test Unordered Map") {
   container.emplace(obj, 3);
   obj = new ReferenceCounted3(4, "4");
   container.emplace(obj, 4);
-  CHECK(obj->UseCount() == 2);
-  obj.Reset();
+  CHECK(obj->use_count() == 2);
+  obj.reset();
 }
 
 TEST_CASE("Test STL compatibility") {
-  RefCounterPtr<TestInterface1> obj;
+  ref_counter_ptr<TestInterface1> obj;
   std::ostringstream test_stream;
   test_stream << obj;
   CHECK(atoi(test_stream.str().c_str()) == 0);
   test_stream.str("");
-  obj.Reset(new ReferenceCounted1(5));
+  obj.reset(new ReferenceCounted1(5));
   test_stream << obj;
   std::string str = test_stream.str();
   test_stream.str("");
-  test_stream << obj.Get();
+  test_stream << obj.get();
   CHECK(str == test_stream.str());
   test_stream.str("");
-  test_stream << std::hash<RefCounterPtr<TestInterface1>>()(obj);
+  test_stream << std::hash<ref_counter_ptr<TestInterface1>>()(obj);
   str = test_stream.str();
   test_stream.str("");
-  test_stream << std::hash<TestInterface1*>()(obj.Get());
+  test_stream << std::hash<TestInterface1*>()(obj.get());
   CHECK(test_stream.str() == str);
 }
