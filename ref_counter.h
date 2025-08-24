@@ -291,20 +291,20 @@ private:
   typedef ref_weak_ptr this_type;
 
 public:
-  constexpr ref_weak_ptr() noexcept : ctrl_block_(nullptr)
+  constexpr ref_weak_ptr() noexcept : weak_ref_(nullptr)
   {
   }
 
   ref_weak_ptr(T* p)
   {
     if (p) {
-      ctrl_block_ = p->weak_ref();
+      weak_ref_ = p->weak_ref();
     }
   }
 
   template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
   ref_weak_ptr(const ref_weak_ptr<U>&  rhs)
-    : ctrl_block_(rhs.ctrl_block_)
+    : weak_ref_(rhs.weak_ref_)
   {
 
   }
@@ -327,7 +327,7 @@ public:
 
   template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
   ref_weak_ptr(ref_weak_ptr<U>&& rhs)
-    : ctrl_block_(rhs.ctrl_block_)
+    : weak_ref_(rhs.weak_ref_)
   {
 
   }
@@ -357,19 +357,19 @@ public:
 
   ref_count_ptr<T> lock()
   {
-    if (!ctrl_block_) {
+    if (!weak_ref_) {
       return nullptr;
     }
-    return ref_count_ptr<T>(ctrl_block_->get());
+    return ref_count_ptr<T>(weak_ref_->get());
   }
 
   void swap(ref_weak_ptr& rhs) noexcept
   {
-    ctrl_block_.swap(rhs.ctrl_block_);
+    weak_ref_.swap(rhs.weak_ref_);
   }
 
 private:
-  ref_count_ptr<weak_ref<T>> ctrl_block_;
+  ref_count_ptr<weak_ref<T>> weak_ref_;
 };
 
 template<class T, class U> inline bool operator==(ref_count_ptr<T> const& a, ref_count_ptr<U> const& b) noexcept
