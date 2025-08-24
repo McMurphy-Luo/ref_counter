@@ -11,12 +11,12 @@ namespace stdext
 
 class ref_counter
 {
-public:
-  ref_counter() noexcept = default;
   ref_counter(const ref_counter&) = delete;
   ref_counter(const ref_counter&&) = delete;
   ref_counter& operator=(const ref_counter&) = delete;
   ref_counter& operator=(ref_counter&&) = delete;
+public:
+  ref_counter() noexcept = default;
 
   unsigned int increment() noexcept {
     return ++count_;
@@ -197,16 +197,16 @@ template<typename T>
 class weak_ref : public ref_counter
 {
   template<typename U> friend class ref_weak_counter;
-public:
-  explicit weak_ref(T* ptr) noexcept
-    : ptr_(ptr)
-  {
-      
-  }
   weak_ref(const weak_ref&) = delete;
   weak_ref(const weak_ref&&) = delete;
   weak_ref& operator=(const weak_ref&) = delete;
   weak_ref& operator=(weak_ref&&) = delete;
+public:
+  explicit weak_ref(T* ptr) noexcept
+    : ptr_(ptr)
+  {
+
+  }
 
 protected:
   ~weak_ref() override = default;
@@ -227,12 +227,12 @@ template<typename T>
 class ref_weak_counter
 {
   using weak_ref_type = weak_ref<T>;
-public:
-  ref_weak_counter() noexcept = default;
   ref_weak_counter(const ref_weak_counter&) = delete;
   ref_weak_counter(const ref_weak_counter&&) = delete;
   ref_weak_counter& operator=(const ref_weak_counter&) = delete;
   ref_weak_counter& operator=(ref_weak_counter&&) = delete;
+public:
+  ref_weak_counter() noexcept = default;
 
   unsigned int increment() noexcept {
     return ++strong_;
@@ -252,7 +252,7 @@ public:
     return count;
   }
 
-  ref_count_ptr<weak_ref_type> weak_ref() {
+  weak_ref_type* weak_ref() {
     weak_ref_type* before = weak_;
     do {
       if (before) {
@@ -361,6 +361,13 @@ public:
       return nullptr;
     }
     return ref_count_ptr<T>(weak_ref_->get());
+  }
+
+  bool expired() const noexcept {
+    if (!weak_ref_) {
+      return false;
+    }
+    return !!weak_ref_->get();
   }
 
   void swap(ref_weak_ptr& rhs) noexcept
