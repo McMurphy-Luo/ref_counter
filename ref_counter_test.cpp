@@ -7,6 +7,10 @@
 #include <iostream>
 #include <sstream>
 
+using stdext::ref_weak_ptr;
+using stdext::ref_count_ptr;
+using stdext::ref_counter;
+
 class ReferenceCounted0
   : public ref_counter
 {
@@ -95,7 +99,7 @@ private:
 };
 
 TEST_CASE("BasicTest") {
-  ref_counter_ptr<ReferenceCounted0> ptr;
+  ref_count_ptr<ReferenceCounted0> ptr;
   ptr.reset(new ReferenceCounted0());
   ptr = ptr;
   ptr.reset();
@@ -108,7 +112,7 @@ TEST_CASE("BasicTest") {
 }
 
 TEST_CASE("Test Interface Based Reference Counting") {
-  ref_counter_ptr<TestInterface1> ptr;
+  ref_count_ptr<TestInterface1> ptr;
   CHECK(!ptr);
   ptr.reset(new ReferenceCounted1(5));
   CHECK(ptr);
@@ -120,19 +124,19 @@ TEST_CASE("Test Interface Based Reference Counting") {
   CHECK(ptr);
   CHECK(ptr->Test1() == 6);
   {
-    ref_counter_ptr<TestInterface1> another = ptr;
+    ref_count_ptr<TestInterface1> another = ptr;
     CHECK(ptr->use_count() == 2);
   }
   CHECK(ptr->use_count() == 1);
   {
-    std::vector<ref_counter_ptr<TestInterface1>> container;
+    std::vector<ref_count_ptr<TestInterface1>> container;
     container.push_back(ptr);
     container.push_back(ptr);
     container.push_back(ptr);
     container.push_back(ptr);
     CHECK(ptr->use_count() == 5);
   }
-  ref_counter_ptr<TestInterface1> move_result = std::move(ptr);
+  ref_count_ptr<TestInterface1> move_result = std::move(ptr);
   CHECK(move_result != ptr);
   CHECK(nullptr == ptr);
   CHECK(!ptr);
@@ -140,18 +144,18 @@ TEST_CASE("Test Interface Based Reference Counting") {
 }
 
 TEST_CASE("Test Multiple Interface") {
-  ref_counter_ptr<ReferenceCounted3> true_object(new ReferenceCounted3(98, "Hello"));
+  ref_count_ptr<ReferenceCounted3> true_object(new ReferenceCounted3(98, "Hello"));
   true_object = true_object;
   CHECK(true_object->use_count() == 1);
-  ref_counter_ptr<TestInterface1> ptr = true_object;
+  ref_count_ptr<TestInterface1> ptr = true_object;
   CHECK(ptr->use_count() == 2);
   CHECK(ptr->Test1() == 98);
-  ref_counter_ptr<TestInterface2> move_result(std::move(true_object));
+  ref_count_ptr<TestInterface2> move_result(std::move(true_object));
   CHECK(!true_object);
   CHECK(ptr->use_count() == 2);
   CHECK(move_result->Test2() == "Hello");
   CHECK(move_result->use_count() == 2);
-  ref_counter_ptr<TestInterface2> another = true_object;
+  ref_count_ptr<TestInterface2> another = true_object;
 }
 
 class CustomDeletor
@@ -194,7 +198,7 @@ CustomDeletor* CustomDeletor::instance = nullptr;
 
 TEST_CASE("Test Custom Deletor") {
   CHECK(nullptr == CustomDeletor::instance);
-  ref_counter_ptr<TestInterface1> ptr(CustomDeletor::GetInstance());
+  ref_count_ptr<TestInterface1> ptr(CustomDeletor::GetInstance());
   TestInterface1* raw = ptr.get();
   ptr.reset();
   CHECK(CustomDeletor::instance == raw);
@@ -206,8 +210,8 @@ TEST_CASE("Test Custom Deletor") {
 }
 
 TEST_CASE("Test Unordered Map") {
-  std::unordered_map<ref_counter_ptr<TestInterface2>, int> container;
-  ref_counter_ptr<TestInterface2> obj(new ReferenceCounted2("1"));
+  std::unordered_map<ref_count_ptr<TestInterface2>, int> container;
+  ref_count_ptr<TestInterface2> obj(new ReferenceCounted2("1"));
   container.emplace(obj, 1);
   obj = new ReferenceCounted3(2, "2");
   container.emplace(obj, 2);
@@ -220,7 +224,7 @@ TEST_CASE("Test Unordered Map") {
 }
 
 TEST_CASE("Test STL compatibility") {
-  ref_counter_ptr<TestInterface1> obj;
+  ref_count_ptr<TestInterface1> obj;
   std::ostringstream test_stream;
   test_stream << obj;
   CHECK(atoi(test_stream.str().c_str()) == 0);
@@ -232,7 +236,7 @@ TEST_CASE("Test STL compatibility") {
   test_stream << obj.get();
   CHECK(str == test_stream.str());
   test_stream.str("");
-  test_stream << std::hash<ref_counter_ptr<TestInterface1>>()(obj);
+  test_stream << std::hash<ref_count_ptr<TestInterface1>>()(obj);
   str = test_stream.str();
   test_stream.str("");
   test_stream << std::hash<TestInterface1*>()(obj.get());
