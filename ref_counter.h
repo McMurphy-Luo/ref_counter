@@ -280,7 +280,7 @@ protected:
   }
 
 private:
-  std::atomic<unsigned int> strong_{ 0 };
+  std::atomic_int_least32_t strong_{ 0 };
   std::atomic<weak_ref_type*> weak_{ nullptr };
 };
 
