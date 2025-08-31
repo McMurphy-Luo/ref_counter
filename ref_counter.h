@@ -19,19 +19,19 @@ public:
   ref_counter() noexcept = default;
 
   unsigned int increment() noexcept {
-    return ++count_;
+    return count_.fetch_add(1, std::memory_order_acq_rel) + 1;
   }
 
   unsigned int decrement() {
-    unsigned int count = count_;
-    if (--count_ == 0) {
+    unsigned int count = count_.fetch_add(-1, std::memory_order_acq_rel);
+    if (count == 1) {
       on_final_destroy();
     }
-    return count;
+    return count - 1;
   }
 
   int_least32_t use_count() const noexcept {
-    return count_;
+    return count_.load(std::memory_order_acquire);
   }
 
 protected:
@@ -226,7 +226,6 @@ private:
 template<typename T>
 class ref_weak_counter
 {
-  using weak_ref_type = weak_ref<T>;
   ref_weak_counter(const ref_weak_counter&) = delete;
   ref_weak_counter(const ref_weak_counter&&) = delete;
   ref_weak_counter& operator=(const ref_weak_counter&) = delete;
@@ -235,32 +234,32 @@ public:
   ref_weak_counter() noexcept = default;
 
   unsigned int increment() noexcept {
-    return ++strong_;
+    return strong_.fetch_add(1, std::memory_order_acq_rel) + 1;
   }
 
   unsigned int decrement() {
-    unsigned int count = strong_;
-    if (0 == --strong_) {
-      weak_ref_type* weak = weak_;
+    unsigned int count = strong_.fetch_add(-1, std::memory_order_acq_rel);
+    if (1 == count) {
+      stdext::weak_ref<T>* weak = weak_;
       if (weak) {
         weak->reset();
         weak->decrement();
         weak = nullptr;
       }
-      OnFinalDestroy();
+      on_final_destroy();
     }
-    return count;
+    return count - 1;
   }
 
-  weak_ref_type* weak_ref() {
-    weak_ref_type* before = weak_;
+  stdext::weak_ref<T>* weak_ref() {
+    stdext::weak_ref<T>* before = weak_.load(std::memory_order_acquire);
     do {
       if (before) {
         return before;
       }
-      weak_ref_type* temp = DBG_NEW weak_ref_type(static_cast<T*>(this));
+      stdext::weak_ref<T>* temp = DBG_NEW stdext::weak_ref<T>(static_cast<T*>(this));
       temp->increment();
-      if (!weak_.compare_exchange_strong(before, temp)) {
+      if (!weak_.compare_exchange_strong(before, temp, std::memory_order_acq_rel)) {
         temp->decrement();
       } else {
         return temp;
@@ -269,19 +268,19 @@ public:
   }
 
   unsigned int use_count() const noexcept {
-    return strong_;
+    return strong_.load(std::memory_order_acquire);
   }
 
 protected:
   virtual ~ref_weak_counter() = default;
 
-  virtual void OnFinalDestroy() {
+  virtual void on_final_destroy() {
     delete this;
   }
 
 private:
   std::atomic_int_least32_t strong_{ 0 };
-  std::atomic<weak_ref_type*> weak_{ nullptr };
+  std::atomic<stdext::weak_ref<T>*> weak_{ nullptr };
 };
 
 template<class T>
