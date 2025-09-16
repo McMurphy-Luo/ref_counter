@@ -11,12 +11,21 @@ namespace stdext
 
 class ref_counter
 {
-  ref_counter(const ref_counter&) = delete;
-  ref_counter(const ref_counter&&) = delete;
-  ref_counter& operator=(const ref_counter&) = delete;
-  ref_counter& operator=(ref_counter&&) = delete;
 public:
-  ref_counter() noexcept = default;
+  ref_counter() noexcept
+    : count_(0)
+  {
+
+  }
+
+  ref_counter(const ref_counter&) noexcept
+    : count_(0)
+  {
+  }
+
+  ref_counter& operator=(const ref_counter&) noexcept {
+    return *this;
+  }
 
   unsigned int increment() noexcept {
     return count_.fetch_add(1, std::memory_order_acq_rel) + 1;
@@ -42,7 +51,7 @@ protected:
   }
 
 private:
-  std::atomic_int_least32_t count_{ 0 };
+  std::atomic_int_least32_t count_;
 };
 
 template<class T>
@@ -197,10 +206,6 @@ template<typename T>
 class weak_ref : public ref_counter
 {
   template<typename U> friend class ref_weak_counter;
-  weak_ref(const weak_ref&) = delete;
-  weak_ref(const weak_ref&&) = delete;
-  weak_ref& operator=(const weak_ref&) = delete;
-  weak_ref& operator=(weak_ref&&) = delete;
 public:
   explicit weak_ref(T* ptr) noexcept
     : ptr_(ptr)
@@ -226,12 +231,23 @@ private:
 template<typename T>
 class ref_weak_counter
 {
-  ref_weak_counter(const ref_weak_counter&) = delete;
-  ref_weak_counter(const ref_weak_counter&&) = delete;
-  ref_weak_counter& operator=(const ref_weak_counter&) = delete;
-  ref_weak_counter& operator=(ref_weak_counter&&) = delete;
 public:
-  ref_weak_counter() noexcept = default;
+  ref_weak_counter() noexcept
+    : strong_(0)
+    , weak_(nullptr)
+  {
+
+  }
+
+  ref_weak_counter(const ref_weak_counter&) noexcept
+    : strong_(0)
+    , weak_(nullptr)
+  {
+  }
+
+  ref_weak_counter& operator=(const ref_weak_counter&) noexcept {
+    return *this;
+  }
 
   unsigned int increment() noexcept {
     return strong_.fetch_add(1, std::memory_order_acq_rel) + 1;
@@ -279,8 +295,8 @@ protected:
   }
 
 private:
-  std::atomic_int_least32_t strong_{ 0 };
-  std::atomic<stdext::weak_ref<T>*> weak_{ nullptr };
+  std::atomic_int_least32_t strong_;
+  std::atomic<stdext::weak_ref<T>*> weak_;
 };
 
 template<class T>
