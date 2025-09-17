@@ -12,7 +12,7 @@ using stdext::ref_count_ptr;
 using stdext::ref_counter;
 
 class ReferenceCounted0
-  : public ref_counter
+  : public ref_counter<>
 {
 
 protected:
@@ -20,7 +20,7 @@ protected:
 };
 
 class TestInterface1
-  : virtual public ref_counter
+  : virtual public ref_counter<>
 {
 public:
   virtual int Test1() = 0;
@@ -51,7 +51,7 @@ private:
 };
 
 class TestInterface2
-  : virtual public ref_counter
+  : virtual public ref_counter<>
 {
 public:
   virtual std::string Test2() = 0;

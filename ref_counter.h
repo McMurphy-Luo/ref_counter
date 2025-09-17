@@ -9,6 +9,79 @@
 namespace stdext
 {
 
+struct thread_unsafe_counter
+{
+  typedef uint_least32_t value_type;
+  typedef uint_least32_t type;
+
+  static value_type load(type const& counter) noexcept
+  {
+    return counter;
+  }
+
+  static value_type increment(type& counter) noexcept
+  {
+    ++counter;
+  }
+
+  static value_type decrement(type& counter) noexcept
+  {
+    return --counter;
+  }
+
+  static bool compare_exchange_strong(type& counter, value_type& expected, value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept
+  {
+    if (counter == expected) {
+      counter = desired;
+      return true;
+    }
+    expected = counter;
+    return false;
+  }
+
+  static bool compare_exchange_weak(type& counter, value_type& expected, value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept
+  {
+    if (counter == expected) {
+      counter = desired;
+      return true;
+    }
+    expected = counter;
+    return false;
+  }
+};
+
+struct thread_safe_counter
+{
+  typedef uint_least32_t value_type;
+  typedef std::atomic_uint_least32_t type;
+
+  static value_type load(type const& counter) noexcept
+  {
+    return counter.load(std::memory_order_acquire);
+  }
+
+  static value_type increment(type& counter) noexcept
+  {
+    return counter.fetch_add(1, std::memory_order_acq_rel) + 1;
+  }
+
+  static value_type decrement(type& counter) noexcept
+  {
+    return counter.fetch_add(-1, std::memory_order_acq_rel) - 1;
+  }
+
+  static bool compare_exchange_strong(type& counter, value_type& expected, value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept
+  {
+    return counter.compare_exchange_strong(expected, desired, order);
+  }
+
+  static bool compare_exchange_weak(type& counter, value_type& expected, value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept
+  {
+    return counter.compare_exchange_weak(expected, desired, order);
+  }
+};
+
+template<typename counter_policy = thread_safe_counter>
 class ref_counter
 {
 public:
@@ -27,20 +100,20 @@ public:
     return *this;
   }
 
-  unsigned int increment() noexcept {
-    return count_.fetch_add(1, std::memory_order_acq_rel) + 1;
+  typename counter_policy::value_type increment() noexcept {
+    return counter_policy::increment(count_);
   }
 
-  unsigned int decrement() {
-    unsigned int count = count_.fetch_add(-1, std::memory_order_acq_rel);
-    if (count == 1) {
+  typename counter_policy::value_type decrement() {
+    typename counter_policy::value_type count = counter_policy::decrement(count_);
+    if (count == 0) {
       on_final_destroy();
     }
-    return count - 1;
+    return count;
   }
 
-  int_least32_t use_count() const noexcept {
-    return count_.load(std::memory_order_acquire);
+  typename counter_policy::value_type use_count() const noexcept {
+    return counter_policy::load(count_);
   }
 
 protected:
@@ -51,7 +124,7 @@ protected:
   }
 
 private:
-  std::atomic_int_least32_t count_;
+  typename counter_policy::type count_;
 };
 
 template<class T>
@@ -202,46 +275,42 @@ private:
   T* px;
 };
 
-template<typename T>
-class weak_ref : public ref_counter
+template<typename counter_policy>
+class ref_weak_counter;
+
+template<typename counter_policy = thread_safe_counter>
+class ref_ctrl_block : public ref_counter<counter_policy>
 {
-  template<typename U> friend class ref_weak_counter;
 public:
-  explicit weak_ref(T* ptr) noexcept
-    : ptr_(ptr)
+  ref_ctrl_block(ref_weak_counter<counter_policy>* the_ptr)
+    : ref_counter<counter_policy>()
+    , strong(0)
+    , ptr(the_ptr)
   {
 
   }
 
-protected:
-  ~weak_ref() override = default;
-
 public:
-  T* get() {
-    return ptr_;
-  }
-
-private:
-  void reset() {
-    ptr_ = nullptr;
-  }
-  T* ptr_{ nullptr };
+  typename counter_policy::type strong;
+  ref_weak_counter<counter_policy>* ptr;
 };
 
-template<typename T>
+template<typename counter_policy = thread_safe_counter>
 class ref_weak_counter
 {
+  template<class U> friend class ref_weak_ptr;
+public:
+  typedef counter_policy counter_policy;
+
 public:
   ref_weak_counter() noexcept
-    : strong_(0)
-    , weak_(nullptr)
+    : ctrl_block_(new ref_ctrl_block<counter_policy>(this))
   {
 
   }
 
   ref_weak_counter(const ref_weak_counter&) noexcept
-    : strong_(0)
-    , weak_(nullptr)
+    : ctrl_block_(new ref_ctrl_block<counter_policy>(this))
   {
   }
 
@@ -249,42 +318,21 @@ public:
     return *this;
   }
 
-  unsigned int increment() noexcept {
-    return strong_.fetch_add(1, std::memory_order_acq_rel) + 1;
+  typename counter_policy::value_type increment() noexcept {
+    return counter_policy::increment(ctrl_block_->strong);
   }
 
-  unsigned int decrement() {
-    unsigned int count = strong_.fetch_add(-1, std::memory_order_acq_rel);
-    if (1 == count) {
-      stdext::weak_ref<T>* weak = weak_;
-      if (weak) {
-        weak->reset();
-        weak->decrement();
-        weak = nullptr;
-      }
+  typename counter_policy::value_type decrement() {
+    typename counter_policy::value_type count = counter_policy::decrement(ctrl_block_->strong);
+    if (0 == count) {
+      ctrl_block_->ptr = nullptr;
       on_final_destroy();
     }
-    return count - 1;
+    return count;
   }
 
-  stdext::weak_ref<T>* weak_ref() {
-    stdext::weak_ref<T>* before = weak_.load(std::memory_order_acquire);
-    do {
-      if (before) {
-        return before;
-      }
-      stdext::weak_ref<T>* temp = DBG_NEW stdext::weak_ref<T>(static_cast<T*>(this));
-      temp->increment();
-      if (!weak_.compare_exchange_strong(before, temp, std::memory_order_acq_rel)) {
-        temp->decrement();
-      } else {
-        return temp;
-      }
-    } while (true);
-  }
-
-  unsigned int use_count() const noexcept {
-    return strong_.load(std::memory_order_acquire);
+  typename counter_policy::value_type use_count() const noexcept {
+    return counter_policy::load(ctrl_block_->strong);
   }
 
 protected:
@@ -295,39 +343,40 @@ protected:
   }
 
 private:
-  std::atomic_int_least32_t strong_;
-  std::atomic<stdext::weak_ref<T>*> weak_;
+  ref_count_ptr<ref_ctrl_block<counter_policy>> ctrl_block_;
 };
 
 template<class T>
 class ref_weak_ptr
 {
 private:
+  typedef typename T::counter_policy counter_policy;
   typedef ref_weak_ptr this_type;
 
 public:
-  constexpr ref_weak_ptr() noexcept : weak_ref_(nullptr)
+  constexpr ref_weak_ptr() noexcept
+    : ctrl_block_(nullptr)
   {
   }
 
-  ref_weak_ptr(T* p)
+  template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
+  ref_weak_ptr(U* p)
   {
     if (p) {
-      weak_ref_ = p->weak_ref();
+      ctrl_block_ = p->ctrl_block_;
     }
   }
 
   template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
   ref_weak_ptr(const ref_weak_ptr<U>&  rhs)
-    : weak_ref_(rhs.weak_ref_)
+    : ctrl_block_(rhs.ctrl_block_)
   {
 
   }
 
   template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
   ref_weak_ptr(const ref_count_ptr<U>& rhs)
-    : ref_weak_ptr(rhs.px)
-    
+    : ref_weak_ptr(rhs.get())
   {
 
   }
@@ -342,7 +391,7 @@ public:
 
   template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
   ref_weak_ptr(ref_weak_ptr<U>&& rhs)
-    : weak_ref_(rhs.weak_ref_)
+    : ctrl_block_(rhs.ctrl_block_)
   {
 
   }
@@ -354,7 +403,8 @@ public:
     return *this;
   }
 
-  ref_weak_ptr& operator=(T* rhs)
+  template<class U, typename std::enable_if<std::is_convertible<U*, T*>::value, int>::type = 0>
+  ref_weak_ptr& operator=(U* rhs)
   {
     this_type(rhs).swap(*this);
     return *this;
@@ -372,26 +422,31 @@ public:
 
   ref_count_ptr<T> lock()
   {
-    if (!weak_ref_) {
+    if (!ctrl_block_ || !ctrl_block_->ptr) {
       return nullptr;
     }
-    return ref_count_ptr<T>(weak_ref_->get());
+    typename counter_policy::value_type count = counter_policy::load(ctrl_block_->strong);
+    do {
+      if (!ctrl_block_->ptr) {
+        return nullptr;
+      }
+    } while (!counter_policy::compare_exchange_weak(ctrl_block_->strong, count, count + 1, std::memory_order_acq_rel));
+    return ref_count_ptr<T>(static_cast<T*>(ctrl_block_->ptr), false);
   }
 
   bool expired() const noexcept {
-    if (!weak_ref_) {
-      return false;
+    if (!ctrl_block_) {
+      return true;
     }
-    return !!weak_ref_->get();
+    return !ctrl_block_->ptr;
   }
 
-  void swap(ref_weak_ptr& rhs) noexcept
-  {
-    weak_ref_.swap(rhs.weak_ref_);
+  void swap(ref_weak_ptr& rhs) noexcept {
+    ctrl_block_.swap(rhs.ctrl_block_);
   }
 
 private:
-  ref_count_ptr<weak_ref<T>> weak_ref_;
+  ref_count_ptr<ref_ctrl_block<counter_policy>> ctrl_block_;
 };
 
 template<class T, class U> inline bool operator==(ref_count_ptr<T> const& a, ref_count_ptr<U> const& b) noexcept

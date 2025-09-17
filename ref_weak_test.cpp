@@ -8,7 +8,7 @@ using stdext::ref_weak_counter;
 using stdext::ref_count_ptr;
 
 class BasicWeakReference
-  : public ref_weak_counter<BasicWeakReference>
+  : public ref_weak_counter<>
 {
 
 
@@ -53,9 +53,11 @@ TEST_CASE("Inheritance weak reference")
 {
   InheritanceWeakReference* derived = DBG_NEW InheritanceWeakReference();
   derived->increment();
-  ref_weak_ptr<BasicWeakReference> p_weak_1 = derived;
+  ref_weak_ptr<BasicWeakReference> p_weak_1(derived);
+  ref_weak_ptr<InheritanceWeakReference> p_weak_2(derived);
   CHECK(p_weak_1.lock());
-  CHECK(p_weak_1.lock());
+  CHECK(p_weak_2.lock());
   derived->decrement();
   CHECK(!p_weak_1.lock());
+  CHECK(!p_weak_2.lock());
 }
