@@ -5,14 +5,15 @@
 #include <ostream>
 #include <type_traits>
 #include <functional>
+#include <assert.h>
 
 namespace stdext
 {
 
 struct thread_unsafe_counter
 {
-  typedef uint_least32_t value_type;
-  typedef uint_least32_t type;
+  typedef int_least32_t value_type;
+  typedef int_least32_t type;
 
   static value_type load(type const& counter) noexcept
   {
@@ -29,17 +30,7 @@ struct thread_unsafe_counter
     return --counter;
   }
 
-  static bool compare_exchange_strong(type& counter, value_type& expected, value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept
-  {
-    if (counter == expected) {
-      counter = desired;
-      return true;
-    }
-    expected = counter;
-    return false;
-  }
-
-  static bool compare_exchange_weak(type& counter, value_type& expected, value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept
+  static bool compare_exchange_weak(type& counter, value_type& expected, value_type desired) noexcept
   {
     if (counter == expected) {
       counter = desired;
@@ -52,8 +43,8 @@ struct thread_unsafe_counter
 
 struct thread_safe_counter
 {
-  typedef uint_least32_t value_type;
-  typedef std::atomic_uint_least32_t type;
+  typedef int_least32_t value_type;
+  typedef std::atomic_int_least32_t type;
 
   static value_type load(type const& counter) noexcept
   {
@@ -70,14 +61,9 @@ struct thread_safe_counter
     return counter.fetch_add(-1, std::memory_order_acq_rel) - 1;
   }
 
-  static bool compare_exchange_strong(type& counter, value_type& expected, value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept
+  static bool compare_exchange_weak(type& counter, value_type& expected, value_type desired) noexcept
   {
-    return counter.compare_exchange_strong(expected, desired, order);
-  }
-
-  static bool compare_exchange_weak(type& counter, value_type& expected, value_type desired, std::memory_order order = std::memory_order_seq_cst) noexcept
-  {
-    return counter.compare_exchange_weak(expected, desired, order);
+    return counter.compare_exchange_weak(expected, desired, std::memory_order_seq_cst);
   }
 };
 
@@ -106,6 +92,7 @@ public:
 
   typename counter_policy::value_type decrement() {
     typename counter_policy::value_type count = counter_policy::decrement(count_);
+    assert(count >= 0);
     if (count == 0) {
       on_final_destroy();
     }
@@ -275,7 +262,7 @@ private:
   T* px;
 };
 
-template<typename counter_policy>
+template<typename counter_policy = thread_safe_counter> 
 class ref_weak_counter;
 
 template<typename counter_policy = thread_safe_counter>
@@ -295,7 +282,7 @@ public:
   ref_weak_counter<counter_policy>* ptr;
 };
 
-template<typename counter_policy = thread_safe_counter>
+template<typename counter_policy>
 class ref_weak_counter
 {
   template<class U> friend class ref_weak_ptr;
@@ -324,8 +311,8 @@ public:
 
   typename counter_policy::value_type decrement() {
     typename counter_policy::value_type count = counter_policy::decrement(ctrl_block_->strong);
+    assert(count >= 0);
     if (0 == count) {
-      ctrl_block_->ptr = nullptr;
       on_final_destroy();
     }
     return count;
@@ -364,6 +351,8 @@ public:
   {
     if (p) {
       ctrl_block_ = p->ctrl_block_;
+    } else {
+      ctrl_block_ = nullptr;
     }
   }
 
@@ -422,15 +411,17 @@ public:
 
   ref_count_ptr<T> lock()
   {
-    if (!ctrl_block_ || !ctrl_block_->ptr) {
+    if (!ctrl_block_) {
       return nullptr;
     }
     typename counter_policy::value_type count = counter_policy::load(ctrl_block_->strong);
+    typename counter_policy::value_type new_count = 0;
     do {
-      if (!ctrl_block_->ptr) {
+      if (count == 0) {
         return nullptr;
       }
-    } while (!counter_policy::compare_exchange_weak(ctrl_block_->strong, count, count + 1, std::memory_order_acq_rel));
+      new_count = count + 1;
+    } while (!counter_policy::compare_exchange_weak(ctrl_block_->strong, count, new_count));
     return ref_count_ptr<T>(static_cast<T*>(ctrl_block_->ptr), false);
   }
 
@@ -438,7 +429,7 @@ public:
     if (!ctrl_block_) {
       return true;
     }
-    return !ctrl_block_->ptr;
+    return 0 == counter_policy::load(ctrl_block_->strong);
   }
 
   void swap(ref_weak_ptr& rhs) noexcept {
