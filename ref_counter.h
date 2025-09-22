@@ -351,8 +351,6 @@ public:
   {
     if (p) {
       ctrl_block_ = p->ctrl_block_;
-    } else {
-      ctrl_block_ = nullptr;
     }
   }
 
