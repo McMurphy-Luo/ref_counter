@@ -22,7 +22,7 @@ struct thread_unsafe_counter
 
   static value_type increment(type& counter) noexcept
   {
-    ++counter;
+    return ++counter;
   }
 
   static value_type decrement(type& counter) noexcept
@@ -287,7 +287,7 @@ class ref_weak_counter
 {
   template<class U> friend class ref_weak_ptr;
 public:
-  typedef counter_policy counter_policy;
+  typedef counter_policy counter;
 
 public:
   ref_weak_counter() noexcept
@@ -337,7 +337,7 @@ template<class T>
 class ref_weak_ptr
 {
 private:
-  typedef typename T::counter_policy counter_policy;
+  typedef typename T::counter counter_policy;
   typedef ref_weak_ptr this_type;
 
 public:
